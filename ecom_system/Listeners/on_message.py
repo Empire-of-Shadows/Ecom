@@ -117,7 +117,8 @@ class MessageListener(commands.Cog):
                 user_id=user_id,
                 guild_id=guild_id,
                 message_content=message_content,
-                channel_id=channel_id
+                channel_id=channel_id,
+                is_thread=analysis['is_thread']
             )
 
             self.logger.debug(

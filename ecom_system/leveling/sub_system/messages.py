@@ -5,7 +5,7 @@ import re
 from typing import Optional, Dict, Any
 
 from ecom_system.helpers.content_analyzer import ContentAnalyzer
-from ecom_system.helpers.helpers import utc_now_ts, utc_today_key
+from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
 from ecom_system.helpers.leveled_up import LevelUpMessages
 from ecom_system.helpers.rate_limiter import rate_limiter
 from ecom_system.helpers.daily_streak import (
@@ -25,13 +25,6 @@ logger = get_logger("MessageLeveling", level=logging.DEBUG, json_format=False, c
 # =============================================================================
 # TODO: UNIMPLEMENTED FEATURES FROM SETTINGS
 # =============================================================================
-#
-# 1. DAILY/WEEKLY/MONTHLY CAPS (settings.message.daily_caps, weekly_caps, monthly_caps)
-#    - daily_caps: {"xp": 3000, "embers": 2000}
-#    - weekly_caps: {"xp": 21000, "embers": 14000}
-#    - monthly_caps: {"xp": 84000, "embers": 56000}
-#    Location: validate_message() or process_rewards()
-#    Implementation: Check user_data.message_stats.{today,weekly,monthly}_{xp,embers} against caps
 #
 # 2. QUALITY ANALYSIS SETTINGS (settings.message.quality_analysis.*)
 #    Currently using hardcoded values, should use:
@@ -94,7 +87,8 @@ class MessageLevelingSystem:
             user_id: str,
             guild_id: str,
             message_content: str,
-            channel_id: str = None
+            channel_id: str = None,
+            is_thread: bool = False
     ) -> Optional[dict]:
         """
         Process a message and calculate rewards with comprehensive logging.
@@ -115,6 +109,8 @@ class MessageLevelingSystem:
             logger.debug(f"  📝 Message length: {len(message_content)} characters")
             if channel_id:
                 logger.debug(f"  📍 Channel ID: {channel_id}")
+            if is_thread:
+                logger.debug("  🧵 Message is in a thread")
 
             # =================================================================
             # STEP 1: Anti-cheat validation
@@ -126,7 +122,7 @@ class MessageLevelingSystem:
                 processing_steps["anti_cheat"]["duration_ms"] = (time.time() - step_start) * 1000
                 logger.warning(f"🚫 Message blocked by anti-cheat: G:{guild_id} U:{user_id}")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        reason="Anti-cheat violation")
+                                        is_thread=is_thread, settings=settings, reason="Anti-cheat violation")
                 return None
 
             processing_steps["anti_cheat"]["passed"] = True
@@ -159,11 +155,6 @@ class MessageLevelingSystem:
             step_start = time.time()
             logger.debug("Step 3: Validating message...")
 
-            # TODO: Add channel validation here
-            # - Check if channel_id is in disabled_channels
-            # - Check if channel has special caps via channel_caps
-
-
             message_length = len(message_content)
             validation_result = await self.validate_message(message_length, settings, user_data)
 
@@ -173,7 +164,7 @@ class MessageLevelingSystem:
                 processing_steps["validation"]["reason"] = validation_result["reason"]
                 logger.info(f"  ❌ Validation failed: {validation_result['reason']}")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        reason=validation_result["reason"])
+                                        is_thread=is_thread, settings=settings, reason=validation_result["reason"])
                 return validation_result.get("result")
 
             processing_steps["validation"]["passed"] = True
@@ -185,7 +176,7 @@ class MessageLevelingSystem:
             step_start = time.time()
             logger.debug("Step 4: Analyzing message content...")
 
-            content_analysis = self.analyze_message_content(message_content)
+            content_analysis = self.analyze_message_content(message_content, settings)
 
             processing_steps["content_analysis"]["completed"] = True
             processing_steps["content_analysis"]["duration_ms"] = (time.time() - step_start) * 1000
@@ -206,7 +197,7 @@ class MessageLevelingSystem:
             logger.debug("Step 5: Calculating rewards...")
 
             rewards = await self.calculate_message_rewards(
-                message_length, user_data, settings, content_analysis
+                message_length, user_data, settings, content_analysis, channel_id, is_thread
             )
 
             processing_steps["reward_calculation"]["completed"] = True
@@ -231,7 +222,7 @@ class MessageLevelingSystem:
             logger.debug("Step 6: Processing rewards and updating database...")
 
             result = await self.process_rewards(
-                user_id, guild_id, rewards, user_data, settings
+                user_id, guild_id, rewards, user_data, settings, channel_id
             )
 
             processing_steps["database_update"]["completed"] = True
@@ -240,7 +231,7 @@ class MessageLevelingSystem:
             if not result:
                 logger.error("  ❌ Failed to process rewards")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        reason="Database update failed")
+                                        is_thread=is_thread, settings=settings, reason="Database update failed")
                 return None
 
             logger.debug(f"  ✅ Database updated ({processing_steps['database_update']['duration_ms']:.2f}ms)")
@@ -258,7 +249,7 @@ class MessageLevelingSystem:
             # Log comprehensive final summary
             self._log_final_summary(
                 guild_id, user_id, processing_steps, start_time,
-                success=True, result=result, rewards=rewards,
+                success=True, is_thread=is_thread, settings=settings, result=result, rewards=rewards,
                 content_analysis=content_analysis
             )
 
@@ -271,6 +262,8 @@ class MessageLevelingSystem:
             processing_steps: Dict[str, Any],
             start_time: float,
             success: bool,
+            is_thread: bool,
+            settings: Dict[str, Any],
             reason: str = None,
             result: Dict[str, Any] = None,
             rewards: Dict[str, Any] = None,
@@ -285,6 +278,8 @@ class MessageLevelingSystem:
             processing_steps: Dictionary tracking each processing step
             start_time: Processing start timestamp
             success: Whether processing succeeded
+            is_thread: Whether the message was in a thread
+            settings: Guild settings
             reason: Failure reason if applicable
             result: Final result dictionary if successful
             rewards: Calculated rewards if applicable
@@ -351,6 +346,26 @@ class MessageLevelingSystem:
                 if content_analysis.get('factors'):
                     logger.info(f"  • Quality Factors: {', '.join(content_analysis['factors'])}")
 
+            if rewards:
+                msg_cfg = settings.get("message", {})
+                base_xp = msg_cfg.get("base_xp", 0)
+                base_embers = msg_cfg.get("base_embers", 0)
+                multipliers = result.get("multipliers", {})
+
+                logger.info("")
+                logger.info("⚙️ Reward Calculation:")
+                logger.info(f"  • Base Rewards: {base_xp} XP, {base_embers} Embers")
+                logger.info(f"  • Multipliers:")
+                logger.info(f"    - Quality: {multipliers.get('quality', 1.0):.2f}x")
+                logger.info(f"    - Streak: {multipliers.get('streak', 1.0):.2f}x")
+                logger.info(f"    - Length: {multipliers.get('length', 1.0):.2f}x")
+                logger.info(f"    - Channel/Thread: {multipliers.get('channel', 1.0):.2f}x")
+                logger.info(f"    - Low Level: {multipliers.get('low_level', 1.0):.2f}x")
+
+            logger.info("")
+            logger.info("📝 Message Context:")
+            logger.info(f"  • In Thread: {'Yes' if is_thread else 'No'}")
+
         logger.info("=" * 70)
 
     async def check_anti_cheat(self, guild_id: str, user_id: str, content: str) -> bool:
@@ -411,75 +426,64 @@ class MessageLevelingSystem:
             logger.debug(f"    ⚠️  Low unique word ratio: {unique_ratio:.2f}")
             return False
 
-        # Check for excessive caps
-        if content:
-            caps_ratio = sum(1 for c in content if c.isupper()) / len(content)
-            logger.debug(f"    • Caps ratio: {caps_ratio:.2f}")
-
-            if caps_ratio > 0.7:  # 70% caps
-                logger.debug(f"    ⚠️  Excessive caps: {caps_ratio:.2f}")
-                return False
-
         return True
 
-    def analyze_message_content(self, content: str) -> Dict[str, Any]:
+    def analyze_message_content(self, content: str, settings: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyze message content for quality scoring.
-
-        TODO: Implement quality_analysis settings from config:
-        - Use settings.message.quality_analysis.emoji_bonus instead of hardcoded 0.05
-        - Use settings.message.quality_analysis.link_bonus instead of hardcoded 0.08
-        - Add attachment_bonus (requires attachment data from Discord message)
-        - Add mention_penalty (requires mention data from Discord message)
-        - Add caps_penalty (integrate with existing caps check)
-        - Add constructive_bonus (requires sentiment/ML analysis)
-        - Add code_block_bonus (requires code block detection with regex)
         """
+        quality_cfg = settings.get("message", {}).get("quality_analysis", {})
+
         analysis = {
             "score": 1.0,
             "length": len(content),
             "word_count": len(content.split()),
             "emoji_count": ContentAnalyzer.count_emojis(content),
             "link_count": ContentAnalyzer.count_links(content),
+            "code_block_count": len(re.findall(r'```[\s\S]*?```|`[^`]+`', content)),
+            "caps_ratio": sum(1 for c in content if c.isupper()) / len(content) if content else 0,
             "has_links": False,
             "bonuses": {},
+            "penalties": {},
             "factors": []
         }
 
-        # TODO: Load quality_analysis settings
-        # quality_cfg = settings.get("message", {}).get("quality_analysis", {}) if settings else {}
-
-        # Length bonus (TODO: Use length_quality_threshold and length_quality_bonus from settings)
-        if analysis["length"] >= 50:
-            analysis["score"] *= 1.1
-            analysis["bonuses"]["length"] = 1.1
+        # Length bonus
+        length_threshold = quality_cfg.get("length_quality_threshold", 50)
+        length_bonus_multiplier = quality_cfg.get("length_quality_bonus", 1.1)
+        if analysis["length"] >= length_threshold:
+            analysis["score"] *= length_bonus_multiplier
+            analysis["bonuses"]["length"] = length_bonus_multiplier
             analysis["factors"].append("substantial_content")
 
-        # Emoji bonus (TODO: Use emoji_bonus from settings)
+        # Emoji bonus
         if analysis["emoji_count"] > 0:
-            emoji_bonus = min(1.0 + (analysis["emoji_count"] * 0.05), 1.25)
-            analysis["score"] *= emoji_bonus
-            analysis["bonuses"]["emojis"] = emoji_bonus
+            emoji_bonus_multiplier = quality_cfg.get("emoji_bonus", 1.05)
+            analysis["score"] *= emoji_bonus_multiplier
+            analysis["bonuses"]["emojis"] = emoji_bonus_multiplier
             analysis["factors"].append("emoji_usage")
 
-        # Link bonus (TODO: Use link_bonus from settings)
+        # Link bonus
         if analysis["link_count"] > 0:
             analysis["has_links"] = True
-            link_bonus = min(1.0 + (analysis["link_count"] * 0.08), 1.2)
-            analysis["score"] *= link_bonus
-            analysis["bonuses"]["links"] = link_bonus
+            link_bonus_multiplier = quality_cfg.get("link_bonus", 1.03)
+            analysis["score"] *= link_bonus_multiplier
+            analysis["bonuses"]["links"] = link_bonus_multiplier
             analysis["factors"].append("link_sharing")
 
-        # Word count bonus
-        if analysis["word_count"] >= 15:
-            analysis["score"] *= 1.08
-            analysis["bonuses"]["detailed"] = 1.08
-            analysis["factors"].append("detailed_content")
+        # Code block bonus
+        if analysis["code_block_count"] > 0:
+            code_block_bonus_multiplier = quality_cfg.get("code_block_bonus", 1.07)
+            analysis["score"] *= code_block_bonus_multiplier
+            analysis["bonuses"]["code_block"] = code_block_bonus_multiplier
+            analysis["factors"].append("code_sharing")
 
-        # TODO: Add code block detection and bonus
-        # code_blocks = re.findall(r'```[\s\S]*?```|`[^`]+`', content)
-        # if code_blocks and quality_cfg.get("code_block_bonus"):
-        #     analysis["score"] *= quality_cfg["code_block_bonus"]
+        # Caps penalty
+        if analysis["caps_ratio"] > 0.7:
+            caps_penalty_multiplier = quality_cfg.get("caps_penalty", 0.8)
+            analysis["score"] *= caps_penalty_multiplier
+            analysis["penalties"]["excessive_caps"] = caps_penalty_multiplier
+            analysis["factors"].append("penalty_caps")
 
         # Clamp final score
         analysis["score"] = max(0.5, min(analysis["score"], 2.0))
@@ -490,10 +494,6 @@ class MessageLevelingSystem:
     Dict[str, Any]:
         """
         Basic message validation.
-
-        TODO: Implement channel validation:
-        - Check if channel_id is in settings.message.disabled_channels
-        - Check daily/weekly/monthly caps against user_data.message_stats
         """
         msg_cfg = settings.get("message", {})
         min_length = msg_cfg.get("min_length", 3)
@@ -503,10 +503,11 @@ class MessageLevelingSystem:
         logger.debug(f"    • Min length required: {min_length}")
         logger.debug(f"    • Cooldown: {cooldown_seconds}s")
 
-        # TODO: Check if channel is disabled
-        # disabled_channels = msg_cfg.get("disabled_channels", [])
-        # if channel_id and channel_id in disabled_channels:
-        #     return {"valid": False, "reason": "Channel disabled for leveling"}
+        # Check if channel is disabled
+        disabled_channels = msg_cfg.get("disabled_channels", [])
+        if channel_id and channel_id in disabled_channels:
+            logger.debug(f"    ❌ Channel {channel_id} is disabled for leveling")
+            return {"valid": False, "reason": "Channel disabled for leveling"}
 
         # Length validation
         if message_length < min_length:
@@ -531,12 +532,44 @@ class MessageLevelingSystem:
                 "reason": f"Cooldown active ({remaining:.1f}s remaining)"
             }
 
-        # TODO: Check daily/weekly/monthly caps
-        # daily_caps = msg_cfg.get("daily_caps", {})
-        # if daily_caps:
-        #     today_xp = user_data.get("message_stats", {}).get("today_xp", 0)
-        #     if today_xp >= daily_caps.get("xp", float('inf')):
-        #         return {"valid": False, "reason": "Daily XP cap reached"}
+        # Check if any caps are already met
+        today_key = utc_today_key()
+        week_key = utc_week_key()
+        month_key = utc_month_key()
+
+        user_today_key = user_data.get("message_stats", {}).get("today_key")
+        user_week_key = user_data.get("message_stats", {}).get("week_key")
+        user_month_key = user_data.get("message_stats", {}).get("month_key")
+
+        # Daily caps
+        daily_caps = msg_cfg.get("daily_caps", {})
+        if daily_caps:
+            today_xp = user_data.get("message_stats", {}).get("today_xp", 0) if user_today_key == today_key else 0
+            if today_xp >= daily_caps.get("xp", float('inf')):
+                return {"valid": False, "reason": "Daily XP cap reached"}
+            today_embers = user_data.get("message_stats", {}).get("today_embers", 0) if user_today_key == today_key else 0
+            if today_embers >= daily_caps.get("embers", float('inf')):
+                return {"valid": False, "reason": "Daily Embers cap reached"}
+
+        # Weekly caps
+        weekly_caps = msg_cfg.get("weekly_caps", {})
+        if weekly_caps:
+            weekly_xp = user_data.get("message_stats", {}).get("weekly_xp", 0) if user_week_key == week_key else 0
+            if weekly_xp >= weekly_caps.get("xp", float('inf')):
+                return {"valid": False, "reason": "Weekly XP cap reached"}
+            weekly_embers = user_data.get("message_stats", {}).get("weekly_embers", 0) if user_week_key == week_key else 0
+            if weekly_embers >= weekly_caps.get("embers", float('inf')):
+                return {"valid": False, "reason": "Weekly Embers cap reached"}
+
+        # Monthly caps
+        monthly_caps = msg_cfg.get("monthly_caps", {})
+        if monthly_caps:
+            monthly_xp = user_data.get("message_stats", {}).get("monthly_xp", 0) if user_month_key == month_key else 0
+            if monthly_xp >= monthly_caps.get("xp", float('inf')):
+                return {"valid": False, "reason": "Monthly XP cap reached"}
+            monthly_embers = user_data.get("message_stats", {}).get("monthly_embers", 0) if user_month_key == month_key else 0
+            if monthly_embers >= monthly_caps.get("embers", float('inf')):
+                return {"valid": False, "reason": "Monthly Embers cap reached"}
 
         logger.debug(f"    ✅ All validation checks passed")
         return {"valid": True, "reason": "validation_passed"}
@@ -547,15 +580,11 @@ class MessageLevelingSystem:
             user_data: Dict,
             settings: Dict,
             content_analysis: Dict,
-            channel_id: str = None
+            channel_id: str = None,
+            is_thread: bool = False
     ) -> Dict[str, float]:
         """
         Calculate message rewards based on content and user stats.
-
-        TODO: Implement channel bonuses:
-        - Apply settings.message.channel_bonuses[channel_id] multiplier
-        - Apply settings.message.premium_channels[channel_id] multiplier
-        - Apply settings.message.thread_bonus if in thread
         """
         try:
             logger.debug(f"  💰 Calculating rewards:")
@@ -569,17 +598,15 @@ class MessageLevelingSystem:
             logger.debug(f"    • Max length: {max_length}")
 
             # Length factor - use a more reasonable scaling
-            # Give full base rewards up to 100 chars, then bonus up to max_length
             if message_length <= 100:
                 length_factor = 1.0
             else:
-                # Bonus for longer messages, capped at max_length
                 bonus_length = min(message_length - 100, max_length - 100)
                 length_factor = 1.0 + (bonus_length / (max_length - 100)) * 0.5  # Up to 50% bonus
 
             logger.debug(f"    • Length factor: {length_factor:.2f} (message: {message_length} chars)")
 
-            # Streak bonus - using new helper
+            # Streak bonus
             daily_streak = user_data.get("daily_streak", {}).get("count", 0)
             streak_bonus = get_streak_bonus(daily_streak)
 
@@ -598,28 +625,36 @@ class MessageLevelingSystem:
                 xp_multiplier = 1.0
                 embers_multiplier = 1.0
 
-            # TODO: Apply channel bonuses
-            # channel_multiplier = 1.0
-            # channel_bonuses = msg_cfg.get("channel_bonuses", {})
-            # if channel_id and channel_id in channel_bonuses:
-            #     channel_multiplier = channel_bonuses[channel_id]
-            #     logger.debug(f"    • Channel bonus: {channel_multiplier}x")
+            # Channel and thread bonuses
+            channel_multiplier = 1.0
+            
+            channel_bonuses = msg_cfg.get("channel_bonuses", {})
+            if channel_id and channel_id in channel_bonuses:
+                bonus = channel_bonuses[channel_id]
+                channel_multiplier *= bonus
+                logger.debug(f"    • Channel bonus applied: {bonus}x")
 
-            # TODO: Apply thread bonus
-            # thread_bonus = msg_cfg.get("thread_bonus", 1.0)
-            # if is_thread:  # Need to pass this from Discord message
-            #     xp_multiplier *= thread_bonus
-            #     logger.debug(f"    • Thread bonus: {thread_bonus}x")
+            premium_channels = msg_cfg.get("premium_channels", {})
+            if channel_id and channel_id in premium_channels:
+                bonus = premium_channels[channel_id]
+                channel_multiplier *= bonus
+                logger.debug(f"    • Premium channel bonus applied: {bonus}x")
+
+            if is_thread:
+                thread_bonus = msg_cfg.get("thread_bonus", 1.0)
+                if thread_bonus > 1.0:
+                    channel_multiplier *= thread_bonus
+                    logger.debug(f"    • Thread bonus applied: {thread_bonus}x")
 
             # Calculate final rewards
-            calculated_xp = base_xp * length_factor * streak_bonus * quality_score * xp_multiplier
-            calculated_embers = base_embers * length_factor * streak_bonus * quality_score * embers_multiplier
+            calculated_xp = base_xp * length_factor * streak_bonus * quality_score * xp_multiplier * channel_multiplier
+            calculated_embers = base_embers * length_factor * streak_bonus * quality_score * embers_multiplier * channel_multiplier
 
             final_xp = max(1, round(calculated_xp))
             final_embers = max(1, round(calculated_embers))
 
             logger.debug(
-                f"    • Calculation: {base_xp} * {length_factor:.2f} * {streak_bonus:.2f} * {quality_score:.2f} * {xp_multiplier:.2f} = {calculated_xp:.2f}")
+                f"    • Calculation: {base_xp} * {length_factor:.2f} * {streak_bonus:.2f} * {quality_score:.2f} * {xp_multiplier:.2f} * {channel_multiplier:.2f} = {calculated_xp:.2f}")
             logger.debug(f"    • Final: {final_xp} XP, {final_embers} Embers")
 
             return {
@@ -629,7 +664,8 @@ class MessageLevelingSystem:
                     "length": length_factor,
                     "streak": streak_bonus,
                     "quality": quality_score,
-                    "low_level": xp_multiplier
+                    "low_level": xp_multiplier,
+                    "channel": channel_multiplier
                 }
             }
 
@@ -643,12 +679,12 @@ class MessageLevelingSystem:
             guild_id: str,
             rewards: Dict,
             user_data: Dict,
-            settings: Dict
+            settings: Dict,
+            channel_id: str = None
     ) -> Optional[Dict]:
         """
         Process rewards and update user data.
 
-        TODO: Implement reward caps enforcement:
         - Check if adding rewards would exceed daily/weekly/monthly caps
         - Cap the rewards accordingly and log when caps are hit
         """
@@ -661,15 +697,59 @@ class MessageLevelingSystem:
 
             logger.debug(f"    • Current state: Level {current_level}, {current_xp} XP, {current_embers} Embers")
 
-            # TODO: Apply caps to rewards before adding
-            # msg_cfg = settings.get("message", {})
-            # daily_caps = msg_cfg.get("daily_caps", {})
-            # if daily_caps:
-            #     today_xp = user_data.get("message_stats", {}).get("today_xp", 0)
-            #     max_daily_xp = daily_caps.get("xp", float('inf'))
-            #     if today_xp + rewards["xp"] > max_daily_xp:
-            #         rewards["xp"] = max(0, max_daily_xp - today_xp)
-            #         logger.warning(f"    ⚠️  XP capped due to daily limit")
+            msg_cfg = settings.get("message", {})
+
+            # Apply channel-specific caps to rewards
+            if channel_id:
+                channel_caps_config = msg_cfg.get("channel_caps", {}).get(channel_id, {})
+                if channel_caps_config:
+                    logger.debug(f"    • Applying channel caps for channel {channel_id}")
+
+                    # Get current cumulative stats for the channel
+                    current_channel_xp = user_data.get("message_stats", {}).get("channel_xp", {}).get(channel_id, 0)
+                    current_channel_embers = user_data.get("message_stats", {}).get("channel_embers", {}).get(channel_id, 0)
+
+                    # Apply XP cap for channel
+                    max_channel_xp = channel_caps_config.get("xp", float('inf'))
+                    if rewards["xp"] > 0 and current_channel_xp + rewards["xp"] > max_channel_xp:
+                        original_xp = rewards["xp"]
+                        rewards["xp"] = max(0, max_channel_xp - current_channel_xp)
+                        if rewards["xp"] < original_xp:
+                            logger.warning(f"    ⚠️  XP capped due to channel {channel_id} limit (U:{user_id}, G:{guild_id}). Original: {original_xp}, Capped: {rewards['xp']}")
+
+                    # Apply Embers cap for channel
+                    max_channel_embers = channel_caps_config.get("embers", float('inf'))
+                    if rewards["embers"] > 0 and current_channel_embers + rewards["embers"] > max_channel_embers:
+                        original_embers = rewards["embers"]
+                        rewards["embers"] = max(0, max_channel_embers - current_channel_embers)
+                        if rewards["embers"] < original_embers:
+                            logger.warning(f"    ⚠️  Embers capped due to channel {channel_id} limit (U:{user_id}, G:{guild_id}). Original: {original_embers}, Capped: {rewards['embers']}")
+
+            # Apply global caps to rewards
+            for cap_type in ["daily", "weekly", "monthly"]:
+                caps = msg_cfg.get(f"{cap_type}_caps", {})
+                if not caps:
+                    continue
+
+                # Get current cumulative stats for the cap type
+                current_xp_stat = user_data.get("message_stats", {}).get(f"{cap_type}_xp", 0)
+                current_embers_stat = user_data.get("message_stats", {}).get(f"{cap_type}_embers", 0)
+
+                # Apply XP cap
+                max_xp = caps.get("xp", float('inf'))
+                if rewards["xp"] > 0 and current_xp_stat + rewards["xp"] > max_xp:
+                    original_xp = rewards["xp"]
+                    rewards["xp"] = max(0, max_xp - current_xp_stat)
+                    if rewards["xp"] < original_xp:
+                        logger.warning(f"    ⚠️  XP capped due to {cap_type} limit (U:{user_id}, G:{guild_id}). Original: {original_xp}, Capped: {rewards['xp']}")
+
+                # Apply Embers cap
+                max_embers = caps.get("embers", float('inf'))
+                if rewards["embers"] > 0 and current_embers_stat + rewards["embers"] > max_embers:
+                    original_embers = rewards["embers"]
+                    rewards["embers"] = max(0, max_embers - current_embers_stat)
+                    if rewards["embers"] < original_embers:
+                        logger.warning(f"    ⚠️  Embers capped due to {cap_type} limit (U:{user_id}, G:{guild_id}). Original: {original_embers}, Capped: {rewards['embers']}")
 
             # Calculate new totals
             new_xp = current_xp + rewards.get("xp", 0)
@@ -694,6 +774,8 @@ class MessageLevelingSystem:
             # Update database
             now = utc_now_ts()
             today_key = utc_today_key()
+            week_key = utc_week_key()
+            month_key = utc_month_key()
 
             update_data = {
                 "$set": {
@@ -704,13 +786,23 @@ class MessageLevelingSystem:
                     "last_rewarded.message": now,
                     "message_stats.last_message_time": now,
                     "message_stats.today_key": today_key,
+                    "message_stats.week_key": week_key,
+                    "message_stats.month_key": month_key,
                 },
                 "$inc": {
                     "message_stats.messages": 1,
                     "message_stats.today_xp": rewards.get("xp", 0),
                     "message_stats.today_embers": rewards.get("embers", 0),
+                    "message_stats.weekly_xp": rewards.get("xp", 0),
+                    "message_stats.weekly_embers": rewards.get("embers", 0),
+                    "message_stats.monthly_xp": rewards.get("xp", 0),
+                    "message_stats.monthly_embers": rewards.get("embers", 0),
                 }
             }
+
+            if channel_id:
+                update_data["$inc"][f"message_stats.channel_xp.{channel_id}"] = rewards.get("xp", 0)
+                update_data["$inc"][f"message_stats.channel_embers.{channel_id}"] = rewards.get("embers", 0)
 
             # Update streak if needed
             if should_update_streak:
