@@ -197,12 +197,32 @@ class VoiceLevelingSystem:
             # rewards = self._apply_voice_caps(rewards, user_data, settings)
 
             if rewards["xp"] > 0 or rewards["embers"] > 0:
-                await self._update_user_voice_stats(
+                result_data = await self._update_user_voice_stats(
                     user_id, guild_id, rewards, metrics, user_data, settings
                 )
 
                 logger.info(f"💰 Voice rewards awarded: {rewards['xp']} XP, "
                             f"{rewards['embers']} Embers for {active_seconds:.1f}s active")
+                
+                # =================================================================
+                # Check for achievements
+                # =================================================================
+                if result_data and hasattr(self.leveling_system, 'achievement_system') and self.leveling_system.achievement_system:
+                    logger.debug("Checking for voice achievements...")
+                    try:
+                        activity_data = {
+                            "type": "voice",
+                            "metrics": metrics,
+                            "rewards": rewards,
+                            "leveled_up": result_data.get("leveled_up", False),
+                            "new_level": result_data.get("level_up", {}).get("new_level")
+                        }
+                        await self.leveling_system.achievement_system.check_and_update_achievements(
+                            user_id, guild_id, activity_data
+                        )
+                        logger.debug("✅ Voice achievements checked.")
+                    except Exception as e:
+                        logger.error(f"❌ Voice achievement check failed: {e}", exc_info=True)
 
         except Exception as e:
             logger.error(f"❌ Error processing voice rewards: {e}", exc_info=True)
