@@ -1,0 +1,250 @@
+{
+  "export_timestamp": "2025-11-10T08:39:28.564080",
+  "databases": {
+    "Achievements": {
+      "collection_count": 10,
+      "collections": [
+        "Prestige",
+        "Activity",
+        "Quality",
+        "Engagement",
+        "Basic",
+        "Voice",
+        "Level",
+        "Special",
+        "Social",
+        "Settings"
+      ]
+    },
+    "Activity": {
+      "collection_count": 1,
+      "collections": [
+        "Events"
+      ]
+    },
+    "Boosts": {
+      "collection_count": 1,
+      "collections": [
+        "XP-Boosts"
+      ]
+    },
+    "Challanges": {
+      "collection_count": 1,
+      "collections": [
+        "Settings"
+      ]
+    },
+    "Ecom-Server": {
+      "collection_count": 5,
+      "collections": [
+        "Rewards",
+        "RoleProgress",
+        "Users",
+        "ActivityEvents",
+        "RewardsSettings"
+      ]
+    },
+    "Inventory": {
+      "collection_count": 1,
+      "collections": [
+        "Roles-Color"
+      ]
+    },
+    "LevelingSettings": {
+      "collection_count": 13,
+      "collections": [
+        "TimeWindows",
+        "Permissions",
+        "Prestige",
+        "AntiCheatLogs",
+        "Master",
+        "Economy",
+        "LowLevel",
+        "Advanced",
+        "AntiCheat",
+        "Voice",
+        "Notifications",
+        "Message",
+        "Reaction"
+      ]
+    },
+    "Milestones": {
+      "collection_count": 1,
+      "collections": [
+        "Settings"
+      ]
+    },
+    "Rewards": {
+      "collection_count": 5,
+      "collections": [
+        "Rewards",
+        "Received",
+        "Rules",
+        "History",
+        "Settings"
+      ]
+    },
+    "Role": {
+      "collection_count": 1,
+      "collections": [
+        "Progress"
+      ]
+    },
+    "Roles": {
+      "collection_count": 1,
+      "collections": [
+        "Progress"
+      ]
+    },
+    "Seasonal": {
+      "collection_count": 1,
+      "collections": [
+        "Settings"
+      ]
+    },
+    "Social": {
+      "collection_count": 1,
+      "collections": [
+        "Settings"
+      ]
+    },
+    "Store": {
+      "collection_count": 4,
+      "collections": [
+        "Stock",
+        "Metrics",
+        "Transactions",
+        "Activity"
+      ]
+    },
+    "Users": {
+      "collection_count": 4,
+      "collections": [
+        "Analytics",
+        "AcheievementProgress",
+        "AcheievementProgressTemp",
+        "Stats"
+      ]
+    }
+  },
+  "collections": {
+    "achievements": {
+      "prestige": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Prestige'))",
+      "activity": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Activity'))",
+      "quality": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Quality'))",
+      "engagement": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Engagement'))",
+      "basic": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Basic'))",
+      "voice": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Voice'))",
+      "level": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Level'))",
+      "special": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Special'))",
+      "social": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Social'))",
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Achievements'), 'Settings'))"
+    },
+    "activity": {
+      "events": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Activity'), 'Events'))"
+    },
+    "boosts": {
+      "xp-boosts": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Boosts'), 'XP-Boosts'))"
+    },
+    "challanges": {
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Challanges'), 'Settings'))"
+    },
+    "ecom-server": {
+      "rewards": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Ecom-Server'), 'Rewards'))",
+      "roleprogress": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Ecom-Server'), 'RoleProgress'))",
+      "users": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Ecom-Server'), 'Users'))",
+      "activityevents": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Ecom-Server'), 'ActivityEvents'))",
+      "rewardssettings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Ecom-Server'), 'RewardsSettings'))"
+    },
+    "inventory": {
+      "roles-color": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Inventory'), 'Roles-Color'))"
+    },
+    "levelingsettings": {
+      "timewindows": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'TimeWindows'))",
+      "permissions": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Permissions'))",
+      "prestige": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Prestige'))",
+      "anticheatlogs": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'AntiCheatLogs'))",
+      "master": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Master'))",
+      "economy": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Economy'))",
+      "lowlevel": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'LowLevel'))",
+      "advanced": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Advanced'))",
+      "anticheat": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'AntiCheat'))",
+      "voice": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Voice'))",
+      "notifications": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Notifications'))",
+      "message": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Message'))",
+      "reaction": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'LevelingSettings'), 'Reaction'))"
+    },
+    "milestones": {
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Milestones'), 'Settings'))"
+    },
+    "rewards": {
+      "rewards": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Rewards'), 'Rewards'))",
+      "received": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Rewards'), 'Received'))",
+      "rules": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Rewards'), 'Rules'))",
+      "history": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Rewards'), 'History'))",
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Rewards'), 'Settings'))"
+    },
+    "role": {
+      "progress": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Role'), 'Progress'))"
+    },
+    "roles": {
+      "progress": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Roles'), 'Progress'))"
+    },
+    "seasonal": {
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Seasonal'), 'Settings'))"
+    },
+    "social": {
+      "settings": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Social'), 'Settings'))"
+    },
+    "store": {
+      "stock": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Store'), 'Stock'))",
+      "metrics": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Store'), 'Metrics'))",
+      "transactions": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Store'), 'Transactions'))",
+      "activity": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Store'), 'Activity'))"
+    },
+    "users": {
+      "analytics": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Users'), 'Analytics'))",
+      "acheievementprogress": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Users'), 'AcheievementProgress'))",
+      "acheievementprogresstemp": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Users'), 'AcheievementProgressTemp'))",
+      "stats": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Users'), 'Stats'))"
+    }
+  },
+  "metrics": {
+    "connection_attempts": 1,
+    "successful_connections": 1,
+    "failed_connections": 0,
+    "reconnection_attempts": 0,
+    "health_check_failures": 0,
+    "last_connection_time": 235382.9394988,
+    "last_health_check": null,
+    "total_operations": 0,
+    "failed_operations": 0,
+    "databases_discovered": 15,
+    "collections_discovered": 50
+  },
+  "connection_info": {
+    "initialized": true,
+    "healthy": true,
+    "metrics": {
+      "connection_attempts": 1,
+      "successful_connections": 1,
+      "failed_connections": 0,
+      "reconnection_attempts": 0,
+      "health_check_failures": 0,
+      "last_connection_time": 235382.9394988,
+      "last_health_check": null,
+      "total_operations": 0,
+      "failed_operations": 0,
+      "databases_discovered": 15,
+      "collections_discovered": 50
+    },
+    "config": {
+      "max_pool_size": 50,
+      "min_pool_size": 10,
+      "connection_timeout": 10000,
+      "server_selection_timeout": 5000
+    },
+    "databases_count": 15,
+    "collections_count": 50
+  }
+}
