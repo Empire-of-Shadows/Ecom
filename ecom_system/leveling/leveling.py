@@ -6,6 +6,7 @@ from database.DatabaseManager import get_collection, ensure_database_connection,
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
 from ecom_system.leveling.sub_system.messages import MessageLevelingSystem
 from ecom_system.leveling.sub_system.voice import VoiceLevelingSystem
+from ecom_system.achievement_system.achievement_system import AchievementSystem
 from loggers.logger_setup import get_logger
 
 logger = get_logger("LevelingSystem", level=logging.DEBUG, json_format=False, colored_console=True)
@@ -21,6 +22,7 @@ class LevelingSystem:
         """Initialize database connections using global DatabaseManager."""
         # Primary user stats collection
         self.users = get_collection("Users", "Stats")
+        self.user_achievements = get_collection("Users", "AcheievementProgress")
 
         # Leveling settings collections
         self.ls_master = get_collection("LevelingSettings", "Master")
@@ -40,6 +42,7 @@ class LevelingSystem:
 
         self.message_system = MessageLevelingSystem(self)
         self.voice_system = VoiceLevelingSystem(self)
+        self.achievement_system = AchievementSystem(self)
         # Bot instance will be set later
         self.bot = None
 
@@ -110,6 +113,29 @@ class LevelingSystem:
         except Exception as e:
             logger.error(f"❌ Error getting user data: {e}")
             return None
+
+    async def get_enhanced_user_data(self, user_id: str, guild_id: str) -> Optional[Dict[str, Any]]:
+        """Get user data and ensure it's validated and migrated."""
+        user_doc = await self.get_user_data(user_id, guild_id)
+        if not user_doc:
+            # If user doesn't exist, create a fresh profile.
+            # The achievement system might be the first to query a user who hasn't sent a message yet.
+            user_doc = await self.create_enhanced_user_profile(user_id, guild_id)
+            await self.users.insert_one(user_doc)
+            logger.info(f"📝 Created new user profile via get_enhanced_user_data: G:{guild_id} U:{user_id}")
+            return user_doc
+
+        validated_doc, was_migrated = await self.validate_and_migrate_user_document(user_id, guild_id, user_doc)
+        if was_migrated:
+            # If migration was needed, replace the entire document to ensure consistency
+            await self.users.replace_one(
+                {"user_id": user_id, "guild_id": guild_id},
+                validated_doc,
+                upsert=True
+            )
+            logger.info(f"🔄 User document replaced after migration via get_enhanced_user_data: G:{guild_id} U:{user_id}")
+
+        return validated_doc
 
     async def validate_and_migrate_user_document(self, user_id: str, guild_id: str, user_doc: Dict[str, Any]) -> Dict[
         str, Any]:

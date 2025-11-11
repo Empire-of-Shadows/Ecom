@@ -172,7 +172,7 @@ class AchievementSystem:
         start_time = time.time()
 
         try:
-            settings = await self.leveling_system.get_settings(guild_id)
+            settings = await self.leveling_system.get_guild_settings(guild_id)
             if not settings.get("achievements", {}).get("enabled", True):
                 logger.debug(f"Achievements disabled for guild: {ctx(guild_id=guild_id)}")
                 return
@@ -710,7 +710,7 @@ class AchievementSystem:
     async def _get_next_achievements(self, user_id: str, guild_id: str, limit: int = 5) -> List[Dict]:
         """Get next achievements user is close to unlocking"""
         try:
-            user_data = await self.leveling_system._get_enhanced_user_data(user_id, guild_id)
+            user_data = await self.leveling_system.get_enhanced_user_data(user_id, guild_id)
             user_achievements = await self._get_user_achievements(user_id, guild_id)
             unlocked_ids = user_achievements.get("unlocked", [])
 

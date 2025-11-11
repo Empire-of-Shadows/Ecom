@@ -122,7 +122,7 @@ class MessageLevelingSystem:
                 processing_steps["anti_cheat"]["duration_ms"] = (time.time() - step_start) * 1000
                 logger.warning(f"🚫 Message blocked by anti-cheat: G:{guild_id} U:{user_id}")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        is_thread=is_thread, settings=settings, reason="Anti-cheat violation")
+                                        is_thread=is_thread, reason="Anti-cheat violation")
                 return None
 
             processing_steps["anti_cheat"]["passed"] = True
@@ -253,6 +253,29 @@ class MessageLevelingSystem:
                 content_analysis=content_analysis
             )
 
+            # =================================================================
+            # STEP 8: Check for achievements
+            # =================================================================
+            if hasattr(self.leveling_system, 'achievement_system') and self.leveling_system.achievement_system:
+                logger.debug("Step 8: Checking for achievements...")
+                step_start = time.time()
+                try:
+                    activity_data = {
+                        "type": "message",
+                        "content": message_content,
+                        "channel_id": channel_id,
+                        "is_thread": is_thread,
+                        "rewards": rewards,
+                        "leveled_up": result.get("leveled_up", False),
+                        "new_level": result.get("level_up", {}).get("new_level")
+                    }
+                    await self.leveling_system.achievement_system.check_and_update_achievements(
+                        user_id, guild_id, activity_data
+                    )
+                    logger.debug(f"  ✅ Achievements checked ({(time.time() - step_start) * 1000:.2f}ms)")
+                except Exception as e:
+                    logger.error(f"  ❌ Achievement check failed: {e}", exc_info=True)
+
             return result
 
     def _log_final_summary(
@@ -263,7 +286,7 @@ class MessageLevelingSystem:
             start_time: float,
             success: bool,
             is_thread: bool,
-            settings: Dict[str, Any],
+            settings: Optional[Dict[str, Any]] = None,
             reason: str = None,
             result: Dict[str, Any] = None,
             rewards: Dict[str, Any] = None,
@@ -346,7 +369,7 @@ class MessageLevelingSystem:
                 if content_analysis.get('factors'):
                     logger.info(f"  • Quality Factors: {', '.join(content_analysis['factors'])}")
 
-            if rewards:
+            if rewards and settings:
                 msg_cfg = settings.get("message", {})
                 base_xp = msg_cfg.get("base_xp", 0)
                 base_embers = msg_cfg.get("base_embers", 0)
