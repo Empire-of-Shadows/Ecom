@@ -63,6 +63,7 @@ class MessageListener(commands.Cog):
         """Initialize the message listener with a bot and leveling system."""
         self.bot = bot
         self.leveling_system = None  # Will be set from bot instance
+        self.activity_system = None  # Will be set from bot instance
         self.logger = get_logger("MessageListener")
 
     async def cog_load(self):
@@ -76,6 +77,12 @@ class MessageListener(commands.Cog):
             else:
                 self.logger.error("❌ No leveling system found on bot instance")
                 raise ValueError("Leveling system not available on bot instance")
+
+            if hasattr(self.bot, 'activity_system') and self.bot.activity_system:
+                self.activity_system = self.bot.activity_system
+                self.logger.info("✅ MessageListener using shared activity system from bot")
+            else:
+                self.logger.warning("⚠️ Activity system not found on bot instance. Activity will not be tracked.")
 
         except Exception as e:
             self.logger.error(f"❌ Failed to initialize MessageListener: {e}")
@@ -120,6 +127,14 @@ class MessageListener(commands.Cog):
                 channel_id=channel_id,
                 is_thread=analysis['is_thread']
             )
+
+            # Record user activity
+            if self.activity_system:
+                await self.activity_system.record_activity(
+                    user_id=user_id,
+                    guild_id=guild_id,
+                    activity_type='message'
+                )
 
             self.logger.debug(
                 f"✅ Message processed: {guild_id}:{user_id} "

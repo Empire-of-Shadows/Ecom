@@ -465,6 +465,16 @@ async def _async_main(shutdown_event: asyncio.Event):
     except Exception as e:
         logger.error(f"{e}")
 
+    try:
+        logger.info("Setting up Activity system")
+        from ecom_system.activity_system.activity_system import ActivitySystem
+        activity_system = ActivitySystem(db_manager=db_manager)
+        await activity_system.initialize()
+        bot.activity_system = activity_system
+        logger.info("✅ Activity system attached to bot")
+    except Exception as e:
+        logger.error(f"Failed to setup Activity system: {e}")
+
     # Start all services
     await start_services(shutdown_event)
 
