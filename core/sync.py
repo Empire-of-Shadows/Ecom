@@ -15,7 +15,7 @@ load_dotenv()
 logger = get_logger("sync")
 
 # Directories to scan for cogs (Python packages/modules)
-COG_DIRECTORIES: List[str] = ["ecom_system/Listeners"]
+COG_DIRECTORIES: List[str] = ["ecom_system/Listeners", "ecom_system/activity_system/tasks"]
 
 
 @bot.command(name="load_cogs", help="Loads all cogs in the COG_DIRECTORIES list.")

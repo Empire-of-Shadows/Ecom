@@ -85,8 +85,5 @@ backups/
 # Temporary files
 *.tmp
 *.temp
-/docker-compose.yml
-/Dockerfile
-/deploy.sh
 /new.md
 /Mappings

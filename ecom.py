@@ -196,6 +196,13 @@ async def on_ready():
 
         logger.info(f"🎉 Bot is fully online and operational!")
 
+        # --- One-time cleanup of bot activity data ---
+        # This will iterate through all activity data and remove entries for bots.
+        # Run the bot once with this uncommented, then comment it out again.
+        if bot.activity_system:
+            await bot.activity_system.cleanup_bot_data(bot)
+            logger.info("✅ Completed one-time bot activity data cleanup.")
+
         # Log all commands (non-blocking)
         try:
             await log_all_commands()
