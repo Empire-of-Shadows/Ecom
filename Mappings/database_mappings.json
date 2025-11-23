@@ -1,5 +1,5 @@
 {
-  "export_timestamp": "2025-11-23T04:33:40.231429",
+  "export_timestamp": "2025-11-23T07:06:49.113134",
   "databases": {
     "Achievements": {
       "collection_count": 10,
@@ -17,10 +17,11 @@
       ]
     },
     "Activity": {
-      "collection_count": 2,
+      "collection_count": 3,
       "collections": [
         "LastSeen",
-        "Events"
+        "Events",
+        "UserActivity"
       ]
     },
     "Boosts": {
@@ -149,7 +150,8 @@
     },
     "activity": {
       "lastseen": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Activity'), 'LastSeen'))",
-      "events": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Activity'), 'Events'))"
+      "events": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Activity'), 'Events'))",
+      "useractivity": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Activity'), 'UserActivity'))"
     },
     "boosts": {
       "xp-boosts": "AsyncIOMotorCollection(Collection(Database(MongoClient(host=['192.168.40.73:27021'], document_class=dict, tz_aware=False, connect=False, maxpoolsize=50, minpoolsize=10, maxidletimems=30000, serverselectiontimeoutms=5000, connecttimeoutms=10000, retrywrites=True, retryreads=True, heartbeatfrequencyms=10000, maxconnecting=5, waitqueuetimeoutms=10000, sockettimeoutms=20000, appname='EcomBot-DatabaseManager', driver=DriverInfo(name='Motor', version='3.7.1', platform='asyncio')), 'Boosts'), 'XP-Boosts'))"
@@ -226,12 +228,12 @@
     "failed_connections": 0,
     "reconnection_attempts": 0,
     "health_check_failures": 0,
-    "last_connection_time": 138163.312,
+    "last_connection_time": 147352.203,
     "last_health_check": null,
     "total_operations": 0,
     "failed_operations": 0,
     "databases_discovered": 16,
-    "collections_discovered": 52
+    "collections_discovered": 53
   },
   "connection_info": {
     "initialized": true,
@@ -242,12 +244,12 @@
       "failed_connections": 0,
       "reconnection_attempts": 0,
       "health_check_failures": 0,
-      "last_connection_time": 138163.312,
+      "last_connection_time": 147352.203,
       "last_health_check": null,
       "total_operations": 0,
       "failed_operations": 0,
       "databases_discovered": 16,
-      "collections_discovered": 52
+      "collections_discovered": 53
     },
     "config": {
       "max_pool_size": 50,
@@ -256,6 +258,6 @@
       "server_selection_timeout": 5000
     },
     "databases_count": 16,
-    "collections_count": 52
+    "collections_count": 53
   }
 }

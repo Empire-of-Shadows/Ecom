@@ -13,7 +13,6 @@ import threading
 import time
 from dotenv import load_dotenv
 
-from activity_buffer.activitybuffer import ActivityBuffer
 from core.bot import bot, TOKEN
 from core.sync import attach_databases, load_cogs
 from database.DatabaseManager import db_manager
@@ -24,7 +23,6 @@ from status.idle import rotate_status
 load_dotenv()
 
 # Global activity buffer instance
-activity_buffer: Optional[ActivityBuffer] = None
 
 
 # Enhanced logging with performance tracking
@@ -144,27 +142,26 @@ async def on_ready():
         # Database is now initialized before bot starts, so we skip database attachment here
         logger.info("✅ Database already initialized during startup")
 
-        # Phase 1: Activity Buffer Initialization
+        # Phase 1: Systems Initialization
         try:
-            async with startup_phase("Activity Buffer Initialization"):
-                activity_buffer = ActivityBuffer(
-                    flush_interval=60,  # Flush every minute in production
-                    max_buffer_size=2000,  # Larger buffer for busy servers
-                    high_watermark=1000,  # Early flush at 1000 events
-                    jitter_seconds=10.0,  # Add some randomization
-                    db_path="data/activity.db"  # Store in a data directory
-                )
-                activity_buffer.start()
+            async with startup_phase("Systems Initialization"):
+                logger.info("Setting up Leveling System...")
+                leveling_system = LevelingSystem()
+                await leveling_system.initialize()
+                leveling_system.set_bot(bot)
+                bot.leveling_system = leveling_system
+                logger.info("✅ Leveling system attached to bot.")
 
-                # Make activity buffer accessible to cogs via bot instance
-                bot.activity_buffer = activity_buffer
-
-                logger.info("✅ Activity buffer started successfully")
-        except Exception as activity_error:
-            logger.warning(f"⚠️ Non-critical error during activity buffer initialization: {activity_error}",
-                           exc_info=True)
-            # Set None on the bot instance if initialization failed
-            bot.activity_buffer = None
+                logger.info("Setting up Activity System...")
+                from ecom_system.activity_system.activity_system import ActivitySystem
+                activity_system = ActivitySystem(db_manager=db_manager)
+                await activity_system.initialize()
+                bot.activity_system = activity_system
+                logger.info("✅ Activity system attached to bot.")
+        except Exception as e:
+            logger.error(f"❌ Error during system initialization: {e}", exc_info=True)
+            # Depending on the desired behavior, you might want to stop the bot here
+            # For now, we'll log the error and continue, but dependent cogs will fail.
 
         # Phase 2: Cog Loading
         try:
@@ -459,28 +456,6 @@ async def _async_main(shutdown_event: asyncio.Event):
     except Exception as e:
         logger.critical(f"💥 Failed to initialize database manager: {e}")
         raise
-
-    try:
-        logger.info("Settings up leveling system")
-        leveling_system = LevelingSystem()
-        await leveling_system.initialize()  # This should NOT call set_bot anymore
-        leveling_system.set_bot(bot)  # Call this with the actual bot instance
-
-        # Make the leveling system available to the bot so cogs can access it
-        bot.leveling_system = leveling_system
-        logger.info("✅ Leveling system attached to bot")
-    except Exception as e:
-        logger.error(f"{e}")
-
-    try:
-        logger.info("Setting up Activity system")
-        from ecom_system.activity_system.activity_system import ActivitySystem
-        activity_system = ActivitySystem(db_manager=db_manager)
-        await activity_system.initialize()
-        bot.activity_system = activity_system
-        logger.info("✅ Activity system attached to bot")
-    except Exception as e:
-        logger.error(f"Failed to setup Activity system: {e}")
 
     # Start all services
     await start_services(shutdown_event)

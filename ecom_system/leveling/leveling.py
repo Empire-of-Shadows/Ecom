@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Dict, Any, Optional
 
-from database.DatabaseManager import get_collection, ensure_database_connection, DatabaseConnectionError
+from database.DatabaseManager import get_collection, ensure_database_connection, DatabaseConnectionError, db_manager
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
 from ecom_system.leveling.sub_system.messages import MessageLevelingSystem
 from ecom_system.leveling.sub_system.voice import VoiceLevelingSystem
@@ -10,7 +10,6 @@ from ecom_system.leveling.sub_system.reactions import ReactionLevelingSystem
 from ecom_system.achievement_system.achievement_system import AchievementSystem
 from loggers.logger_setup import get_logger
 from loggers.performance_monitor import PerformanceMonitor
-from activity_buffer.activitybuffer import ActivityBuffer
 
 logger = get_logger("LevelingSystem", level=logging.DEBUG, json_format=False, colored_console=True)
 
@@ -46,7 +45,6 @@ class LevelingSystem:
         self.message_system = MessageLevelingSystem(self)
         self.voice_system = VoiceLevelingSystem(self)
         self.reaction_system = ReactionLevelingSystem(self)
-        self.activity_buffer = ActivityBuffer()
         self.achievement_system = AchievementSystem(self)
         self.performance_monitor = PerformanceMonitor()
         # Bot instance will be set later
@@ -78,6 +76,7 @@ class LevelingSystem:
             self.message_system.level_up_messages = None
             raise
 
+
     async def initialize(self):
         """Initialize the leveling system and ensure database connections."""
         try:
@@ -94,6 +93,13 @@ class LevelingSystem:
         except Exception as e:
             logger.error(f"❌ LevelingSystem initialization failed: {e}", exc_info=True)
             raise
+
+    async def shutdown(self):
+        """Gracefully shutdown the leveling system and stop background tasks."""
+        try:
+            logger.info("✅ LevelingSystem shutdown complete")
+        except Exception as e:
+            logger.error(f"❌ Error during LevelingSystem shutdown: {e}", exc_info=True)
 
     async def verify_critical_collections(self):
         """Verify that critical collections are accessible."""

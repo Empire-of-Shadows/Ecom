@@ -4,9 +4,21 @@ from typing import List, Tuple, Dict
 import discord
 from discord.ext import commands
 
-from activity_buffer.activitybuffer import _safe_channel_name
 from ecom_system.helpers.helpers import utc_now_ts
 from loggers.logger_setup import get_logger, log_performance
+
+
+def _safe_channel_name(channel):
+    """Safe utility function to get channel name with fallback."""
+    try:
+        if hasattr(channel, 'name'):
+            return str(channel.name)
+        elif hasattr(channel, 'recipient'):
+            return f"DM with {channel.recipient.name}"
+        else:
+            return "Unknown Channel"
+    except Exception:
+        return "Unknown Channel"
 
 
 class EnhancedReactionTracker(commands.Cog):
@@ -18,6 +30,7 @@ class EnhancedReactionTracker(commands.Cog):
     - Comprehensive reaction analytics
     - Activity buffer integration for batch processing
     - Leveling system integration for reaction rewards
+    - Activity system integration for comprehensive tracking
     """
 
     def __init__(self, bot):
@@ -25,6 +38,12 @@ class EnhancedReactionTracker(commands.Cog):
         self.bot = bot
         # self.leveling_system is now accessed via self.bot.leveling_system
         # self.tracker is removed and its functionality is moved to the leveling subsystem
+
+        # =====================================================================
+        # SECTION: System References
+        # =====================================================================
+        self.leveling_system = None
+        self.activity_system = None
 
         # =====================================================================
         # SECTION: Logging Setup
@@ -37,6 +56,31 @@ class EnhancedReactionTracker(commands.Cog):
         # =====================================================================
         # Track reaction rates per user per guild: (guild_id, user_id) -> deque of timestamps
         self.reaction_rates: Dict[Tuple[int, int], deque] = defaultdict(lambda: deque(maxlen=20))
+
+    async def cog_load(self):
+        """Initialize systems when cog loads."""
+        self._log.info("🔄 Initializing Enhanced Reaction Tracker...")
+        try:
+            # Initialize leveling system
+            if hasattr(self.bot, 'leveling_system') and self.bot.leveling_system:
+                self.leveling_system = self.bot.leveling_system
+                self._log.info("✅ ReactionTracker using shared leveling system from bot")
+            else:
+                self._log.error("❌ No leveling system found on bot instance")
+                raise ValueError("Leveling system not available on bot instance")
+
+            # Initialize activity system
+            if hasattr(self.bot, 'activity_system') and self.bot.activity_system:
+                self.activity_system = self.bot.activity_system
+                self._log.info("✅ ReactionTracker using shared activity system from bot")
+            else:
+                self._log.warning("⚠️ Activity system not found on bot instance. Activity will not be tracked.")
+
+            self._log.info("✅ Enhanced ReactionTracker fully initialized")
+
+        except Exception as e:
+            self._log.error(f"❌ Failed to initialize ReactionTracker: {e}")
+            raise
 
     # =========================================================================
     # SECTION: Spam Detection Utilities
@@ -155,48 +199,6 @@ class EnhancedReactionTracker(commands.Cog):
         self._log.info("reaction_added", extra=reaction_data)
 
         # =====================================================================
-        # SUBSECTION: Activity Buffer Integration
-        # =====================================================================
-        try:
-            activity_buffer = getattr(self.bot, 'activity_buffer', None)
-            if activity_buffer:
-                await activity_buffer.add_event("reaction_add", {
-                    "guild_id": str(guild_id),
-                    "user_id": str(reactor_id),
-                    "channel_id": str(channel_id),
-                    "message_id": str(message.id),
-                    "message_owner_id": str(message_owner_id),
-                    "emoji": str(reaction.emoji),
-                    "emoji_id": str(reaction_data["emoji_id"]) if reaction_data["emoji_id"] else None,
-                    "emoji_animated": reaction_data["emoji_animated"],
-                    "is_custom_emoji": reaction_data["is_custom_emoji"],
-                    "is_spam": is_spam,
-                    "channel_name": reaction_data["channel_name"],
-                    "is_thread": isinstance(message.channel, discord.Thread),
-                    "timestamp": reaction_data["timestamp"]
-                })
-                self._log.debug(
-                    "activity_buffer_reaction_added",
-                    extra={
-                        "event": "activity_buffer_success",
-                        "guild_id": guild_id,
-                        "user_id": reactor_id,
-                        "message_id": int(message.id)
-                    }
-                )
-        except Exception as e:
-            self._log.warning(
-                "activity_buffer_reaction_add_failed",
-                extra={
-                    "event": "activity_buffer_error",
-                    "guild_id": guild_id,
-                    "user_id": reactor_id,
-                    "message_id": int(message.id),
-                    "error": str(e)
-                }
-            )
-
-        # =====================================================================
         # SUBSECTION: Self-Reaction Check
         # =====================================================================
         if message_owner_id == reactor_id:
@@ -223,6 +225,59 @@ class EnhancedReactionTracker(commands.Cog):
                 }
             )
             return
+
+        # =====================================================================
+        # SUBSECTION: Activity System Integration
+        # =====================================================================
+        if self.activity_system:
+            try:
+                # Prepare detailed activity data for the activity system
+                activity_data = {
+                    "channel_id": str(channel_id),
+                    "channel_name": reaction_data["channel_name"],
+                    "message_id": str(message.id),
+                    "message_owner_id": str(message_owner_id),
+                    "emoji": reaction_data["emoji"],
+                    "emoji_id": str(reaction_data["emoji_id"]) if reaction_data["emoji_id"] else None,
+                    "emoji_animated": reaction_data["emoji_animated"],
+                    "is_custom_emoji": reaction_data["is_custom_emoji"],
+                    "is_spam": is_spam,
+                    "is_thread": isinstance(message.channel, discord.Thread),
+                    "reaction_type": "add",
+                    "created_at": message.created_at.timestamp() if message.created_at else None,
+                    "reactor_name": str(user.name),
+                    "reactor_display_name": str(user.display_name) if hasattr(user, 'display_name') else str(user.name),
+                    "channel_type": str(type(message.channel).__name__)
+                }
+
+                await self.activity_system.record_activity(
+                    user_id=str(reactor_id),
+                    guild_id=str(guild_id),
+                    activity_type='reaction',
+                    activity_data=activity_data
+                )
+
+                self._log.debug(
+                    "activity_system_reaction_recorded",
+                    extra={
+                        "event": "activity_system_success",
+                        "guild_id": guild_id,
+                        "user_id": reactor_id,
+                        "message_id": int(message.id)
+                    }
+                )
+
+            except Exception as e:
+                self._log.warning(
+                    "activity_system_reaction_failed",
+                    extra={
+                        "event": "activity_system_error",
+                        "guild_id": guild_id,
+                        "user_id": reactor_id,
+                        "message_id": int(message.id),
+                        "error": str(e)
+                    }
+                )
 
         try:
             # =============================================================
@@ -305,47 +360,56 @@ class EnhancedReactionTracker(commands.Cog):
             self._log.info("reaction_removed", extra=remove_data)
 
             # =================================================================
-            # SUBSECTION: Activity Buffer Integration
+            # SUBSECTION: Activity System Integration (For Remove Events)
             # =================================================================
-            try:
-                activity_buffer = getattr(self.bot, 'activity_buffer', None)
-                if activity_buffer:
-                    emoji_id = getattr(reaction.emoji, "id", None)
-
-                    await activity_buffer.add_event("reaction_remove", {
-                        "guild_id": str(remove_data["guild_id"]),
-                        "user_id": str(remove_data["user_id"]),
+            if self.activity_system:
+                try:
+                    # Prepare detailed activity data for reaction removal
+                    activity_data = {
                         "channel_id": str(remove_data["channel_id"]),
+                        "channel_name": remove_data["channel_name"],
                         "message_id": str(remove_data["message_id"]),
                         "message_owner_id": str(remove_data["message_owner_id"]),
                         "emoji": remove_data["emoji"],
-                        "emoji_id": str(emoji_id) if emoji_id else None,
+                        "emoji_id": str(getattr(reaction.emoji, "id", None)) if hasattr(reaction.emoji, "id") else None,
                         "emoji_animated": getattr(reaction.emoji, "animated", False),
                         "is_custom_emoji": hasattr(reaction.emoji, "id"),
-                        "channel_name": remove_data["channel_name"],
                         "is_thread": isinstance(message.channel, discord.Thread),
-                        "timestamp": remove_data["timestamp"]
-                    })
+                        "reaction_type": "remove",
+                        "created_at": message.created_at.timestamp() if message.created_at else None,
+                        "reactor_name": str(user.name),
+                        "reactor_display_name": str(user.display_name) if hasattr(user, 'display_name') else str(user.name),
+                        "channel_type": str(type(message.channel).__name__)
+                    }
+
+                    await self.activity_system.record_activity(
+                        user_id=str(remove_data["user_id"]),
+                        guild_id=str(remove_data["guild_id"]),
+                        activity_type='reaction_remove',
+                        activity_data=activity_data
+                    )
+
                     self._log.debug(
-                        "activity_buffer_reaction_removed",
+                        "activity_system_reaction_remove_recorded",
                         extra={
-                            "event": "activity_buffer_success",
+                            "event": "activity_system_success",
                             "guild_id": remove_data["guild_id"],
                             "user_id": remove_data["user_id"],
                             "message_id": remove_data["message_id"]
                         }
                     )
-            except Exception as e:
-                self._log.warning(
-                    "activity_buffer_reaction_remove_failed",
-                    extra={
-                        "event": "activity_buffer_error",
-                        "guild_id": remove_data["guild_id"],
-                        "user_id": remove_data["user_id"],
-                        "message_id": remove_data["message_id"],
-                        "error": str(e)
-                    }
-                )
+
+                except Exception as e:
+                    self._log.warning(
+                        "activity_system_reaction_remove_failed",
+                        extra={
+                            "event": "activity_system_error",
+                            "guild_id": remove_data["guild_id"],
+                            "user_id": remove_data["user_id"],
+                            "message_id": remove_data["message_id"],
+                            "error": str(e)
+                        }
+                    )
 
         except Exception as e:
             self._log.exception(
@@ -392,54 +456,6 @@ class EnhancedReactionTracker(commands.Cog):
 
             self._log.info("reactions_cleared", extra=clear_data)
 
-            # =================================================================
-            # SUBSECTION: Activity Buffer Integration
-            # =================================================================
-            try:
-                activity_buffer = getattr(self.bot, 'activity_buffer', None)
-                if activity_buffer:
-                    # Prepare detailed reaction data for analytics
-                    reactions_cleared = []
-                    for reaction in reactions:
-                        emoji_id = getattr(reaction.emoji, "id", None)
-                        reactions_cleared.append({
-                            "emoji": str(reaction.emoji),
-                            "emoji_id": str(emoji_id) if emoji_id else None,
-                            "emoji_animated": getattr(reaction.emoji, "animated", False),
-                            "is_custom_emoji": hasattr(reaction.emoji, "id"),
-                            "count": reaction.count
-                        })
-
-                    await activity_buffer.add_event("reaction_clear", {
-                        "guild_id": str(clear_data["guild_id"]),
-                        "channel_id": str(clear_data["channel_id"]),
-                        "message_id": str(clear_data["message_id"]),
-                        "reaction_types_removed": clear_data["reaction_types_removed"],
-                        "channel_name": clear_data["channel_name"],
-                        "is_thread": isinstance(message.channel, discord.Thread),
-                        "reactions_cleared": reactions_cleared,
-                        "timestamp": clear_data["timestamp"]
-                    })
-                    self._log.debug(
-                        "activity_buffer_reactions_cleared",
-                        extra={
-                            "event": "activity_buffer_success",
-                            "guild_id": clear_data["guild_id"],
-                            "message_id": clear_data["message_id"],
-                            "reaction_count": reaction_count
-                        }
-                    )
-            except Exception as e:
-                self._log.warning(
-                    "activity_buffer_reaction_clear_failed",
-                    extra={
-                        "event": "activity_buffer_error",
-                        "guild_id": clear_data["guild_id"],
-                        "message_id": clear_data["message_id"],
-                        "error": str(e)
-                    }
-                )
-
         except Exception as e:
             self._log.exception(
                 "reaction_clear_processing_failed",
@@ -484,47 +500,6 @@ class EnhancedReactionTracker(commands.Cog):
 
             self._log.info("reaction_emoji_cleared", extra=clear_emoji_data)
 
-            # =================================================================
-            # SUBSECTION: Activity Buffer Integration
-            # =================================================================
-            try:
-                activity_buffer = getattr(self.bot, 'activity_buffer', None)
-                if activity_buffer:
-                    emoji_id = getattr(reaction.emoji, "id", None)
-
-                    await activity_buffer.add_event("reaction_clear_emoji", {
-                        "guild_id": str(clear_emoji_data["guild_id"]),
-                        "channel_id": str(clear_emoji_data["channel_id"]),
-                        "message_id": str(clear_emoji_data["message_id"]),
-                        "emoji": clear_emoji_data["emoji"],
-                        "emoji_id": str(emoji_id) if emoji_id else None,
-                        "emoji_animated": getattr(reaction.emoji, "animated", False),
-                        "is_custom_emoji": hasattr(reaction.emoji, "id"),
-                        "count": reaction.count,
-                        "channel_name": clear_emoji_data["channel_name"],
-                        "is_thread": isinstance(message.channel, discord.Thread),
-                        "timestamp": clear_emoji_data["timestamp"]
-                    })
-                    self._log.debug(
-                        "activity_buffer_reaction_emoji_cleared",
-                        extra={
-                            "event": "activity_buffer_success",
-                            "guild_id": clear_emoji_data["guild_id"],
-                            "message_id": clear_emoji_data["message_id"],
-                            "emoji": clear_emoji_data["emoji"]
-                        }
-                    )
-            except Exception as e:
-                self._log.warning(
-                    "activity_buffer_reaction_clear_emoji_failed",
-                    extra={
-                        "event": "activity_buffer_error",
-                        "guild_id": clear_emoji_data["guild_id"],
-                        "message_id": clear_emoji_data["message_id"],
-                        "error": str(e)
-                    }
-                )
-
         except Exception as e:
             self._log.exception(
                 "reaction_clear_emoji_processing_failed",
@@ -534,5 +509,7 @@ class EnhancedReactionTracker(commands.Cog):
                 }
             )
 
+
 async def setup(bot):
+    """Setup function for discord.py cog loading."""
     await bot.add_cog(EnhancedReactionTracker(bot))
