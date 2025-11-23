@@ -215,7 +215,7 @@ class AchievementSystem:
                 # ===== PROGRESS TRACKING UPDATE =====
                 # Pass category-keyed dict as expected by progress system
                 await AchievementProgressSystem.update_achievement_progress_tracking(user_id, guild_id, activity_data,
-                                                                                     category_definitions)
+                                                                                     category_definitions, self.leveling_system.activity_buffer)
             except Exception as e:
                 logger.error(f"Error updating achievement progress tracking: {e}")
 
@@ -275,7 +275,7 @@ class AchievementSystem:
             # This ensures progress is updated for any achievements that were close to unlocking
             if unlocked_achievements:
                 await AchievementProgressSystem.update_achievement_progress_tracking(user_id, guild_id, activity_data,
-                                                                                     category_definitions)
+                                                                                     category_definitions, self.leveling_system.activity_buffer)
 
         except Exception as e:
             logger.error(f"❌ Error in achievement system: {e}", exc_info=True)

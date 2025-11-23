@@ -6,8 +6,11 @@ from database.DatabaseManager import get_collection, ensure_database_connection,
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
 from ecom_system.leveling.sub_system.messages import MessageLevelingSystem
 from ecom_system.leveling.sub_system.voice import VoiceLevelingSystem
+from ecom_system.leveling.sub_system.reactions import ReactionLevelingSystem
 from ecom_system.achievement_system.achievement_system import AchievementSystem
 from loggers.logger_setup import get_logger
+from loggers.performance_monitor import PerformanceMonitor
+from activity_buffer.activitybuffer import ActivityBuffer
 
 logger = get_logger("LevelingSystem", level=logging.DEBUG, json_format=False, colored_console=True)
 
@@ -42,7 +45,10 @@ class LevelingSystem:
 
         self.message_system = MessageLevelingSystem(self)
         self.voice_system = VoiceLevelingSystem(self)
+        self.reaction_system = ReactionLevelingSystem(self)
+        self.activity_buffer = ActivityBuffer()
         self.achievement_system = AchievementSystem(self)
+        self.performance_monitor = PerformanceMonitor()
         # Bot instance will be set later
         self.bot = None
 

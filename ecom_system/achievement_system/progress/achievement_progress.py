@@ -5,6 +5,9 @@ from database.DatabaseManager import get_collection_registry, get_collection
 from ecom_system.achievement_system.progress.level_tracker import LevelingProgressTracker
 from ecom_system.achievement_system.progress.message_tracker import MessagesProgressTracker
 from ecom_system.achievement_system.progress.voice_tracker import VoiceProgressTracker
+from ecom_system.achievement_system.progress.reactions_tracker import ReactionsProgressTracker
+from ecom_system.achievement_system.progress.time_based_tracker import TimeBasedProgressTracker
+from ecom_system.achievement_system.progress.db_time_tracker import DBTimeProgressTracker
 from loggers.logger_setup import get_logger
 
 logger = get_logger("AchievementProgressSystem", level=logging.DEBUG, json_format=False, colored_console=True)
@@ -205,12 +208,313 @@ class VoiceProgressHandler:
             return await self.voice_tracker.get_detailed_progress(
                 user_id, guild_id, achievements, unlocked_ids, progress_data
             )
-        except Exception as e:
-            logger.error(f"Error getting detailed voice progress: {e}", exc_info=True)
-            return {"category": "voice", "achievements": [], "summary": {}}
-
-class AchievementProgressSystem:
-    """
+        		except Exception as e:
+        			logger.error(f"Error getting detailed voice progress: {e}", exc_info=True)
+        			return {"category": "voice", "achievements": [], "summary": {}}
+        
+        
+        class ReactionsProgressHandler:
+            """Handler for reaction-based achievements progress tracking"""
+        
+            def __init__(self, progress_system):
+                """Initialize with reference to parent system"""
+                self.progress_system = progress_system
+                self.reactions_tracker = ReactionsProgressTracker(progress_system)
+                self.logger = logger
+        
+            async def update_progress(self, user_id: str, guild_id: str, activity_data: Dict,
+                                      unearned_achievements: List[Dict]) -> Dict[str, Dict[str, Any]]:
+                """Update progress for reaction achievements using ReactionsProgressTracker"""
+                try:
+                    return await self.reactions_tracker.update_progress(
+                        user_id, guild_id, activity_data, unearned_achievements
+                    )
+                except Exception as e:
+                    logger.error(f"Error in reaction progress handler: {e}", exc_info=True)
+                    return {}
+        
+            async def get_progress_summary(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                           unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+                """Get progress summary for reaction achievements"""
+                try:
+                    return await self.reactions_tracker.get_progress_summary(
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+                    )
+                except Exception as e:
+                    logger.error(f"Error getting reaction progress summary: {e}", exc_info=True)
+                    return {"total": 0, "completed": 0, "in_progress": 0, "completion_percentage": 0.0}
+        
+            async def get_detailed_progress(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                            unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+                """Get detailed progress for reaction achievements"""
+                try:
+                    return await self.reactions_tracker.get_detailed_progress(
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+                    )
+                except Exception as e:
+                    logger.error(f"Error getting detailed reaction progress: {e}", exc_info=True)
+                    return {"category": "reactions", "achievements": [], "summary": {}}
+        
+        
+        class TimeBasedProgressHandler:
+        
+        
+            """Handler for time-based achievements progress tracking"""
+        
+        
+        
+        
+        
+            def __init__(self, progress_system):
+        
+        
+                """Initialize with reference to parent system"""
+        
+        
+                self.progress_system = progress_system
+        
+        
+                self.time_based_tracker = TimeBasedProgressTracker(progress_system)
+        
+        
+                self.logger = logger
+        
+        
+        
+        
+        
+            async def update_progress(self, user_id: str, guild_id: str, activity_data: Dict,
+        
+        
+                                      unearned_achievements: List[Dict]) -> Dict[str, Dict[str, Any]]:
+        
+        
+                """Update progress for time-based achievements using TimeBasedProgressTracker"""
+        
+        
+                try:
+        
+        
+                    return await self.time_based_tracker.update_progress(
+        
+        
+                        user_id, guild_id, activity_data, unearned_achievements
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error in time-based progress handler: {e}", exc_info=True)
+        
+        
+                    return {}
+        
+        
+        
+        
+        
+            async def get_progress_summary(self, user_id: str, guild_id: str, achievements: List[Dict],
+        
+        
+                                           unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        
+        
+                """Get progress summary for time-based achievements"""
+        
+        
+                try:
+        
+        
+                    return await self.time_based_tracker.get_progress_summary(
+        
+        
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error getting time-based progress summary: {e}", exc_info=True)
+        
+        
+                    return {"total": 0, "completed": 0, "in_progress": 0, "completion_percentage": 0.0}
+        
+        
+        
+        
+        
+            async def get_detailed_progress(self, user_id: str, guild_id: str, achievements: List[Dict],
+        
+        
+                                            unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        
+        
+                """Get detailed progress for time-based achievements"""
+        
+        
+                try:
+        
+        
+                    return await self.time_based_tracker.get_detailed_progress(
+        
+        
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error getting detailed time-based progress: {e}", exc_info=True)
+        
+        
+                    return {"category": "time_based", "achievements": [], "summary": {}}
+        
+        
+        
+        
+        
+        
+        
+        
+        class DBTimeProgressHandler:
+        
+        
+            """Handler for DB-backed time-based achievements progress tracking"""
+        
+        
+        
+        
+        
+            def __init__(self, progress_system):
+        
+        
+                """Initialize with reference to parent system"""
+        
+        
+                self.progress_system = progress_system
+        
+        
+                self.db_time_tracker = DBTimeProgressTracker(progress_system)
+        
+        
+                self.logger = logger
+        
+        
+        
+        
+        
+            async def update_progress(self, user_id: str, guild_id: str, activity_data: Dict,
+        
+        
+                                      unearned_achievements: List[Dict]) -> Dict[str, Dict[str, Any]]:
+        
+        
+                """Update progress for DB-backed time-based achievements using DBTimeProgressTracker"""
+        
+        
+                try:
+        
+        
+                    return await self.db_time_tracker.update_progress(
+        
+        
+                        user_id, guild_id, activity_data, unearned_achievements
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error in DB time progress handler: {e}", exc_info=True)
+        
+        
+                    return {}
+        
+        
+        
+        
+        
+            async def get_progress_summary(self, user_id: str, guild_id: str, achievements: List[Dict],
+        
+        
+                                           unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        
+        
+                """Get progress summary for DB-backed time-based achievements"""
+        
+        
+                try:
+        
+        
+                    return await self.db_time_tracker.get_progress_summary(
+        
+        
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error getting DB time progress summary: {e}", exc_info=True)
+        
+        
+                    return {"total": 0, "completed": 0, "in_progress": 0, "completion_percentage": 0.0}
+        
+        
+        
+        
+        
+            async def get_detailed_progress(self, user_id: str, guild_id: str, achievements: List[Dict],
+        
+        
+                                            unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        
+        
+                """Get detailed progress for DB-backed time-based achievements"""
+        
+        
+                try:
+        
+        
+                    return await self.db_time_tracker.get_detailed_progress(
+        
+        
+                        user_id, guild_id, achievements, unlocked_ids, progress_data
+        
+        
+                    )
+        
+        
+                except Exception as e:
+        
+        
+                    logger.error(f"Error getting detailed DB time progress: {e}", exc_info=True)
+        
+        
+                    return {"category": "db_time", "achievements": [], "summary": {}}
+        
+        
+        
+        
+        
+        
+        
+        
+        class AchievementProgressSystem:    """
     Standalone achievement progress tracking system.
     Handles accessing category-specific progress handlers and provides unified interface.
     """
@@ -222,19 +526,20 @@ class AchievementProgressSystem:
         self.logger = logger
 
         # Initialize category handlers
-        self.category_handlers = {
-            "message": MessageProgressHandler(self),
-            "level": LevelProgressHandler(self),
-            "voice": VoiceProgressHandler(self),
-            # Future categories can be added here
-        }
-
-        logger.info("🏆 AchievementProgressSystem initialized with specialized trackers")
+        				self.category_handlers = {
+        					"message": MessageProgressHandler(self),
+        					"level": LevelProgressHandler(self),
+        					"voice": VoiceProgressHandler(self),
+        								"reactions": ReactionsProgressHandler(self),
+        								"time_based": TimeBasedProgressHandler(self),
+        								"db_time": DBTimeProgressHandler(self),
+        								# Future categories can be added here
+        							}        logger.info("🏆 AchievementProgressSystem initialized with specialized trackers")
 
     # ===== STATIC PROGRESS UPDATE METHOD =====
     @staticmethod
     async def update_achievement_progress_tracking(user_id: str, guild_id: str, activity_data: Dict,
-                                                   achievement_definitions: Dict | List[Dict] | None):
+                                                   achievement_definitions: Dict | List[Dict] | None, activity_buffer: Any):
         """
         Standalone function to update progress after the achievement system processes unlocks.
         This updates percentage progress for incremental achievements.
@@ -279,6 +584,7 @@ class AchievementProgressSystem:
             temp_db = type('TempDB', (), {
                 'user_achievements': user_achievements_collection,  # Users.AcheievementProgress
                 'users': user_stats_collection,  # Users.Stats (used by trackers)
+                'local_db_path': activity_buffer.local_db.db_path if activity_buffer and hasattr(activity_buffer, 'local_db') else None,
                 **{f'achievements_{name}': collection for name, collection in achievements_collections.items()}
             })()
 

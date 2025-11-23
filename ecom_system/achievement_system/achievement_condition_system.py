@@ -377,8 +377,6 @@ class AchievementConditionSystem:
 			logger.error(f"Error checking time pattern condition: {e}")
 			return False
 
-	# ... existing code ...
-
 	async def _check_weekend_activity_condition_db(self, condition_data: Dict, user_id: str, guild_id: str) -> bool:
 		"""Check weekend activity conditions from local database data - UPDATED FOR LOCAL DB"""
 		try:
