@@ -1,8 +1,8 @@
 import discord
+import logging
 from typing import Dict, List, Optional, Tuple
-from loggers.logger_setup import get_logger
 
-logger = get_logger("LevelRoleChecker", level=20, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class LevelRoleResult:

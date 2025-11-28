@@ -14,12 +14,9 @@ from ecom_system.helpers.daily_streak import (
     create_streak_update_data,
     log_streak_change
 )
-from loggers.logger_setup import log_performance, PerformanceLogger, get_logger
-from dotenv import load_dotenv
+from loggers.log_factory import log_performance, PerformanceLogger
 
-load_dotenv()
-
-logger = get_logger("MessageLeveling", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================

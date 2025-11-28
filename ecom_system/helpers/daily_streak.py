@@ -6,9 +6,8 @@ Handles streak calculations, validations, and updates across the database system
 import logging
 from typing import Dict, Any, Tuple
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key
-from loggers.logger_setup import get_logger
 
-logger = get_logger("DailyStreak", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 def check_and_update_streak(user_data: Dict[str, Any]) -> Tuple[int, bool]:

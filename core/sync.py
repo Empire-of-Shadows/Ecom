@@ -8,11 +8,12 @@ from tabulate import tabulate
 from dotenv import load_dotenv
 
 from core.bot import bot
-from loggers.logger_setup import get_logger, log_performance
+import logging
+from loggers.log_factory import log_performance
 
 load_dotenv()
 
-logger = get_logger("sync")
+logger = logging.getLogger(__name__)
 
 # Directories to scan for cogs (Python packages/modules)
 COG_DIRECTORIES: List[str] = ["ecom_system/Listeners", "ecom_system/activity_system/tasks"]

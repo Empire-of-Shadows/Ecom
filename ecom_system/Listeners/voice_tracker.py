@@ -1,8 +1,9 @@
 import discord
+import logging
 from discord.ext import commands
 
 from ecom_system.helpers.helpers import utc_now_ts
-from loggers.logger_setup import log_performance, get_logger
+from loggers.log_factory import log_performance
 
 
 def _safe_channel_name(channel):
@@ -35,7 +36,7 @@ class VoiceListener(commands.Cog):
         self.bot = bot
         self.leveling_system = None
         self.activity_system = None
-        self.logger = get_logger("VoiceListener")
+        self.logger = logging.getLogger(__name__)
 
     async def cog_load(self):
         """Initialize leveling system and perform startup checks when cog loads."""
@@ -293,13 +294,38 @@ class VoiceListener(commands.Cog):
                 except Exception as e:
                     self.logger.warning(f"Failed to process voice achievements: {e}")
 
-            # Log successful processing with event details
-            self.logger.info(
-                f"✅ Voice event processed: {analysis['event_type']} for {member.name} "
-                f"in {member.guild.name} "
-                f"(join: {analysis['is_join']}, leave: {analysis['is_leave']}, "
-                f"move: {analysis['is_move']}, state_changes: {sum(analysis[k] for k in analysis if k.endswith('_change'))})"
-            )
+            # Create a more descriptive log message
+            log_message = f"🎙️ Voice event for {member.name} in {member.guild.name}: "
+            details = []
+            if analysis['is_join']:
+                details.append(f"joined channel '{_safe_channel_name(after.channel)}'")
+            elif analysis['is_leave']:
+                details.append(f"left channel '{_safe_channel_name(before.channel)}'")
+            elif analysis['is_move']:
+                details.append(f"moved from '{_safe_channel_name(before.channel)}' to '{_safe_channel_name(after.channel)}'")
+            
+            state_changes = []
+            if analysis['self_mute_change']:
+                state_changes.append("self-muted" if after.self_mute else "self-unmuted")
+            if analysis['self_deaf_change']:
+                state_changes.append("self-deafened" if after.self_deaf else "self-undeafened")
+            if analysis['stream_change']:
+                state_changes.append("started streaming" if after.self_stream else "stopped streaming")
+            if analysis['video_change']:
+                state_changes.append("started video" if after.self_video else "stopped video")
+            if analysis['mute_change']:
+                state_changes.append("was server muted" if after.mute else "was server unmuted")
+            if analysis['deaf_change']:
+                state_changes.append("was server deafened" if after.deaf else "was server undeafened")
+
+            if state_changes:
+                details.append(f"has been {', '.join(state_changes)}")
+
+            if not details:
+                details.append(f"state changed in '{_safe_channel_name(after.channel)}'")
+
+            log_message += ", ".join(details)
+            self.logger.info(log_message)
 
         except Exception as e:
             self.logger.error(

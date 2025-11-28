@@ -2,11 +2,14 @@
 import time
 from typing import Dict
 
+import logging
+import time
+from typing import Dict
+
 import discord
 
-from loggers.logger_setup import get_logger
+logger = logging.getLogger(__name__)
 
-logger = get_logger("RateLimiter")
 
 
 class RateLimiter:

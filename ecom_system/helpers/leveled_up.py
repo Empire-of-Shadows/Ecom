@@ -1,11 +1,10 @@
+import logging
 import discord
 from discord import ui
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
-from loggers.logger_setup import get_logger
-
-logger = get_logger("LevelUpMessages")
+logger = logging.getLogger(__name__)
 
 class LevelUpMessages:
     """

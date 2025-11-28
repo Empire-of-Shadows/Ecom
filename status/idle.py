@@ -1,5 +1,6 @@
 import random
 import re
+import logging
 from collections import deque
 from typing import Dict, List, Optional
 
@@ -9,11 +10,11 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 
 from core.bot import bot
-from loggers.logger_setup import get_logger, log_performance, log_context
+from loggers.log_factory import log_performance, log_context
 
 load_dotenv()
 
-logger = get_logger("idle")
+logger = logging.getLogger(__name__)
 
 # You can tweak these to your taste
 ROTATE_MIN_SECONDS = 120  # 2 minutes

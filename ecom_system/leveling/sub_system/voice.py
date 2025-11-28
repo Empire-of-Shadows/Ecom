@@ -10,9 +10,9 @@ from ecom_system.Listeners.VoiceSessions import VoiceSession
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
 from ecom_system.helpers.rate_limiter import rate_limiter
 from ecom_system.helpers.daily_streak import check_and_update_streak, create_streak_update_data
-from loggers.logger_setup import get_logger, log_performance, PerformanceLogger
+from loggers.log_factory import log_performance, PerformanceLogger
 
-logger = get_logger("VoiceLeveling", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 # Import the VoiceSession class
 

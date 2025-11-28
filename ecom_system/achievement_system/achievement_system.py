@@ -9,7 +9,7 @@ from pymongo import UpdateOne
 from database.DatabaseManager import get_collection_registry
 from .achievement_condition_system import AchievementConditionSystem
 from ecom_system.helpers.helpers import utc_now_ts, ctx
-from loggers.logger_setup import get_logger, log_performance
+from loggers.log_factory import log_performance
 from dotenv import load_dotenv
 
 from .progress.achievement_progress import AchievementProgressSystem
@@ -19,7 +19,7 @@ load_dotenv()
 REWARDS_CHANNEL_ID = os.getenv("REWARDS_CHANNEL_ID")
 from core.bot import bot as discord_bot
 
-logger = get_logger("AchievementSystem", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 _initialization_lock = asyncio.Lock()
 _initialization_done = False
@@ -226,12 +226,13 @@ class AchievementSystem:
                     achievements_to_check.append(ach)
                 # No need to log anything for already unlocked achievements - this is normal behavior
 
-            logger.debug(
-                f"Checking {len(achievements_to_check)} achievements for user: {ctx(guild_id=guild_id, user_id=user_id)}")
+            logger.info(
+                f"Evaluating {len(achievements_to_check)} potential achievements for user {user_id} in guild {guild_id}.")
             unlocked_achievements = []
 
             # Check each achievement using the condition system
             for achievement in achievements_to_check:
+                logger.debug(f"  - Checking '{achievement['id']}' ({achievement['name']})")
                 try:
                     if await self.condition_system.check_achievement_condition(
                             achievement, user_id, guild_id, activity_data, user_data, user_achievements
@@ -528,7 +529,8 @@ class AchievementSystem:
                 "special_rewards": special_rewards
             }
 
-            logger.info(f"Achievement rewards granted: {reward_summary}")
+            logger.info(f"💰 Granted rewards for {len(achievements)} achievements: {total_xp} XP, {total_embers} Embers.")
+            logger.debug(f"Detailed rewards summary: {reward_summary}")
             return reward_summary
 
         except Exception as e:

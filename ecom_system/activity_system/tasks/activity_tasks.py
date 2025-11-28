@@ -1,6 +1,6 @@
 import discord
+import logging
 from discord.ext import commands, tasks
-from loggers.logger_setup import get_logger
 
 # Constants
 CATEGORY_ID = 1364204791902896170
@@ -9,7 +9,7 @@ CHANNEL_PREFIX = "WAU: "
 class ActivityTasks(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = get_logger("ActivityTasks")
+        self.logger = logging.getLogger(__name__)
         self.update_active_users_channel.start()
 
     def cog_unload(self):

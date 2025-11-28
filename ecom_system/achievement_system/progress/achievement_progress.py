@@ -9,9 +9,8 @@ from ecom_system.achievement_system.progress.voice_tracker import VoiceProgressT
 from ecom_system.achievement_system.progress.reactions_tracker import ReactionsProgressTracker
 from ecom_system.achievement_system.progress.time_based_tracker import TimeBasedProgressTracker
 from ecom_system.achievement_system.progress.db_time_tracker import DBTimeProgressTracker
-from loggers.logger_setup import get_logger
 
-logger = get_logger("AchievementProgressSystem", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class LevelProgressHandler:

@@ -4,14 +4,13 @@ from typing import Dict, Any
 from datetime import datetime
 
 from ecom_system.helpers.helpers import utc_now_ts
-from loggers.logger_setup import get_logger
 from dotenv import load_dotenv
 
 load_dotenv()
 
 WEBHOOK = os.getenv("DISCORD_ERROR_WEBHOOK")
 
-logger = get_logger("AchievementConditionSystem", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class AchievementConditionSystem:
@@ -196,6 +195,7 @@ class AchievementConditionSystem:
         comparison = condition_data.get("comparison", "gte")
         current_level = user_data.get("level", 1)
 
+        self.logger.debug(f"  - Level condition: current={current_level}, comparison={comparison}, threshold={threshold}")
         return self._compare_values(current_level, threshold, comparison)
 
     def _check_field_condition(self, condition_data: Dict, user_data: Dict) -> bool:
@@ -207,6 +207,7 @@ class AchievementConditionSystem:
         # Navigate nested dictionary using dot notation
         current_value = self._get_nested_value(user_data, field_path)
 
+        self.logger.debug(f"  - Field condition: field='{field_path}', current={current_value}, comparison={comparison}, threshold={threshold}")
         return self._compare_values(current_value, threshold, comparison)
 
     def _check_time_based_condition(self, condition_data: Dict, user_data: Dict) -> bool:
@@ -219,15 +220,16 @@ class AchievementConditionSystem:
         current_time = utc_now_ts()
 
         # Convert to appropriate units
-        time_diff = current_time - created_at
+        time_diff_seconds = current_time - created_at
+        time_diff = time_diff_seconds
         if unit == "days":
-            time_diff = time_diff / 86400  # Convert seconds to days
+            time_diff = time_diff_seconds / 86400  # Convert seconds to days
         elif unit == "hours":
-            time_diff = time_diff / 3600  # Convert seconds to hours
+            time_diff = time_diff_seconds / 3600  # Convert seconds to hours
         elif unit == "minutes":
-            time_diff = time_diff / 60  # Convert seconds to minutes
-        # Default is seconds
-
+            time_diff = time_diff_seconds / 60  # Convert seconds to minutes
+        
+        self.logger.debug(f"  - Time-based condition: unit='{unit}', current_diff={time_diff:.2f}, comparison={comparison}, threshold={threshold}")
         return self._compare_values(time_diff, threshold, comparison)
 
     async def _check_custom_condition(self, condition_data: Dict, user_id: str, guild_id: str,
@@ -270,21 +272,25 @@ class AchievementConditionSystem:
             current_value = float(current_value) if current_value is not None else 0
             threshold = float(threshold)
 
+            result = False
             if comparison == "gte":
-                return current_value >= threshold
+                result = current_value >= threshold
             elif comparison == "gt":
-                return current_value > threshold
+                result = current_value > threshold
             elif comparison == "lte":
-                return current_value <= threshold
+                result = current_value <= threshold
             elif comparison == "lt":
-                return current_value < threshold
+                result = current_value < threshold
             elif comparison == "eq":
-                return current_value == threshold
+                result = current_value == threshold
             elif comparison == "ne":
-                return current_value != threshold
+                result = current_value != threshold
             else:
                 logger.warning(f"Unknown comparison operator: {comparison}")
                 return False
+            
+            logger.debug(f"    - Comparison: {current_value} {comparison} {threshold} -> {result}")
+            return result
 
         except (ValueError, TypeError) as e:
             logger.error(

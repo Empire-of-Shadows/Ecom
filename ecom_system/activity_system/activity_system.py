@@ -1,9 +1,9 @@
 import time
 import asyncio
+import logging
 import discord
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timezone, timedelta
-from loggers.logger_setup import get_logger
 from database.DatabaseManager import DatabaseManager, get_collection, DatabaseOperationError
 
 
@@ -33,7 +33,7 @@ class ActivitySystem:
         self.database_name = database_name
         self.collection_name = "UserActivity"  # Changed from "LastSeen" for better organization
         self.collection = None
-        self.logger = get_logger("ActivitySystem")
+        self.logger = logging.getLogger(__name__)
 
         # Cache for frequently accessed data
         self._guild_cache = {}

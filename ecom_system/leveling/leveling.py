@@ -8,10 +8,8 @@ from ecom_system.leveling.sub_system.messages import MessageLevelingSystem
 from ecom_system.leveling.sub_system.voice import VoiceLevelingSystem
 from ecom_system.leveling.sub_system.reactions import ReactionLevelingSystem
 from ecom_system.achievement_system.achievement_system import AchievementSystem
-from loggers.logger_setup import get_logger
-from loggers.performance_monitor import PerformanceMonitor
 
-logger = get_logger("LevelingSystem", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class LevelingSystem:
@@ -46,7 +44,6 @@ class LevelingSystem:
         self.voice_system = VoiceLevelingSystem(self)
         self.reaction_system = ReactionLevelingSystem(self)
         self.achievement_system = AchievementSystem(self)
-        self.performance_monitor = PerformanceMonitor()
         # Bot instance will be set later
         self.bot = None
 

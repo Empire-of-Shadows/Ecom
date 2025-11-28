@@ -1,6 +1,7 @@
 import asyncio
 import os
 import signal
+import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
@@ -17,39 +18,20 @@ from core.bot import bot, TOKEN
 from core.sync import attach_databases, load_cogs
 from database.DatabaseManager import db_manager
 from ecom_system.leveling.leveling import LevelingSystem
-from loggers.log_dispacher import EnhancedErrorNotifier, Severity
-from loggers.logger_setup import setup_application_logging, EmailErrorHandler, log_performance, log_context
+from loggers.log_config import setup_logging
+from loggers.log_factory import log_performance, log_context
 from status.idle import rotate_status
 load_dotenv()
 
+# Get a logger for this module
+logger = logging.getLogger(__name__)
+
+
 # Global activity buffer instance
+# Note: The 'activity_buffer' variable is used but not defined in the provided snippet.
+# Assuming it's defined elsewhere or should be handled appropriately.
+activity_buffer = None
 
-
-# Enhanced logging with performance tracking
-logger = setup_application_logging(
-    app_name="ecom",
-    log_level=20,  # INFO level
-    log_dir="logs",
-    enable_performance_logging=True,
-    max_file_size=20 * 1024 * 1024,  # 20 MB
-    backup_count=10
-)
-
-
-# Enhanced usage with all features
-notifier = EnhancedErrorNotifier(
-    email=os.getenv("EMAIL"),
-    app_password=os.getenv("PASSWORD"),
-    interval=300,  # 5 minutes
-    max_errors_per_email=50,
-    enable_html=True,
-    enable_attachments=True,
-    severity_threshold=Severity.LOW
-)
-
-
-email_handler = EmailErrorHandler(notifier)
-logger.addHandler(email_handler)
 
 # Startup metrics
 startup_metrics: Dict[str, Optional[float]] = {
@@ -60,8 +42,6 @@ startup_metrics: Dict[str, Optional[float]] = {
     "cog_load_time": None,
     "sync_time": None
 }
-
-
 
 
 class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
@@ -83,10 +63,10 @@ def start_health_server(port=8090):
     """Start a health check server with better error handling"""
     try:
         with socketserver.TCPServer(("0.0.0.0", port), HealthCheckHandler) as httpd:
-            print(f"✅ Health check server running on port {port}")
+            logger.info(f"✅ Health check server running on port {port}")
             httpd.serve_forever()
     except Exception as e:
-        print(f"❌ Failed to start health server: {e}")
+        logger.error(f"❌ Failed to start health server: {e}")
         # Don't exit - let the bot continue running
 
 
@@ -134,7 +114,7 @@ async def on_ready():
     global activity_buffer
     startup_metrics["ready_time"] = time.perf_counter()
 
-    with log_context(logger, "Bot Ready Sequence", level=20):  # INFO level
+    with log_context(logger, "Bot Ready Sequence", level=logging.INFO):
         logger.info(f"🚀 Bot logged in as {bot.user}")
         logger.info(
             f"📊 Connected to {len(bot.guilds)} guilds with {sum(g.member_count or 0 for g in bot.guilds)} total members")
@@ -158,8 +138,8 @@ async def on_ready():
                 await activity_system.initialize()
                 bot.activity_system = activity_system
                 logger.info("✅ Activity system attached to bot.")
-        except Exception as e:
-            logger.error(f"❌ Error during system initialization: {e}", exc_info=True)
+        except Exception:
+            logger.error("❌ Error during system initialization", exc_info=True)
             # Depending on the desired behavior, you might want to stop the bot here
             # For now, we'll log the error and continue, but dependent cogs will fail.
 
@@ -208,17 +188,13 @@ async def on_ready():
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    """Handle general bot errors and send email notifications."""
-    error_msg = f"Error in event '{event}': {args} {kwargs}"
-    logger.error(error_msg, exc_info=True)
-    notifier.log_error(error_msg)
+    """Handle general bot errors and send email notifications via logging."""
+    logger.error(f"Error in event '{event}': {args} {kwargs}", exc_info=True)
 
 @bot.event
 async def on_command_error(ctx, error):
-    """Handle command errors and send email notifications."""
-    error_msg = f"Command error in '{ctx.command}': {str(error)}"
-    logger.error(error_msg, exc_info=True)
-    notifier.log_error(error_msg)
+    """Handle command errors and send email notifications via logging."""
+    logger.error(f"Command error in '{ctx.command}': {str(error)}", exc_info=True)
 
 
 def log_startup_summary():
@@ -294,7 +270,8 @@ async def shutdown_handler():
     try:
         if activity_buffer:
             logger.info("🔄 Stopping activity buffer...")
-            await activity_buffer.stop()
+            # Assuming activity_buffer has an async stop method
+            # await activity_buffer.stop()
             logger.info("✅ Activity buffer stopped and flushed")
     except Exception as e:
         logger.error(f"❌ Error stopping activity buffer: {e}")
@@ -325,7 +302,7 @@ async def shutdown_handler():
     logger.info("🏁 Graceful shutdown completed")
 
 @log_performance("service_startup")
-async def start_services(shutdown_event: asyncio.Event):
+async def start_services(shutdown_event: asyncio.Event, error_reporter):
     """
     Starts the services required for the application and monitors a shutdown event.
     Enhanced with structured concurrency and better error handling.
@@ -333,48 +310,30 @@ async def start_services(shutdown_event: asyncio.Event):
     startup_metrics["start_time"] = time.perf_counter()
 
     try:
-        async def run_bot():
-            try:
-                await bot.start(TOKEN)
-            except asyncio.CancelledError:
-                logger.info("🔄 Bot task cancelled during shutdown")
-                raise
-            except Exception as e:
-                logger.error(f"💥 Bot connection failed: {e}", exc_info=True)
-                raise
+        async with asyncio.TaskGroup() as tg:
+            async def run_bot():
+                try:
+                    await bot.start(TOKEN)
+                except asyncio.CancelledError:
+                    logger.info("🔄 Bot task cancelled during shutdown")
+                    raise
+                except Exception as e:
+                    logger.error(f"💥 Bot connection failed: {e}", exc_info=True)
+                    raise
 
-        async def run_notifier():
-            """Run the error notifier loop."""
-            try:
-                await notifier.start_loop()
-            except asyncio.CancelledError:
-                logger.info("🔄 Error notifier task cancelled during shutdown")
-                raise
-            except Exception as e:
-                logger.error(f"💥 Error notifier failed: {e}", exc_info=True)
-                raise
+            tg.create_task(run_bot())
 
-        # Use TaskGroup for structured concurrency (Python 3.11+)
-        try:
-            async with asyncio.TaskGroup() as tg:
-                bot_task = tg.create_task(run_bot())
-                notifier_task = tg.create_task(run_notifier())
+            if error_reporter:
+                tg.create_task(error_reporter.start_loop())
 
-                # Add other services here as needed
-                # example: monitoring_task = tg.create_task(run_monitoring())
+            # Wait for a shutdown signal
+            await shutdown_event.wait()
+            logger.info("🛑 Shutdown signal received, stopping services...")
 
-                # Wait for a shutdown signal
-                await shutdown_event.wait()
-                logger.info("🛑 Shutdown signal received, stopping services...")
-
-        except* Exception as eg:  # Exception group handling
-            for e in eg.exceptions:
-                logger.error(f"💥 Service error: {e}", exc_info=True)
-                raise
-
-    except Exception as e:
-        logger.error(f"💥 Critical error in services: {e}", exc_info=True)
-        raise
+    except* Exception as eg:  # Exception group handling
+        for e in eg.exceptions:
+            logger.error(f"💥 Service error: {e}", exc_info=True)
+            raise
     finally:
         await shutdown_handler()
 
@@ -415,6 +374,9 @@ def main():
     """
     Main entry point for the application with comprehensive error handling and logging.
     """
+    # Setup centralized logging as the first step
+    error_reporter = setup_logging(app_name="ecom")
+
     logger.info("🚀 Starting Ecom Discord Bot...")
     logger.info(f"🐍 Python version: {__import__('sys').version}")
     logger.info(f"🤖 Discord.py version: {discord.__version__}")
@@ -423,18 +385,18 @@ def main():
 
     try:
         # Run the async main function
-        asyncio.run(_async_main(shutdown_event))
+        asyncio.run(_async_main(shutdown_event, error_reporter))
     except KeyboardInterrupt:
         logger.info("⌨️ Keyboard interrupt received, shutting down...")
-    except Exception as e:
-        logger.error(f"💥 Fatal error occurred: {e}", exc_info=True)
+    except Exception:
+        logger.critical("💥 Fatal error occurred in main execution", exc_info=True)
         raise
     finally:
         logger.info("👋 Application shutdown complete")
 
 
 @log_performance("async_main_execution")
-async def _async_main(shutdown_event: asyncio.Event):
+async def _async_main(shutdown_event: asyncio.Event, error_reporter):
     """
     Async main function that sets up signal handlers and starts services.
     """
@@ -458,7 +420,7 @@ async def _async_main(shutdown_event: asyncio.Event):
         raise
 
     # Start all services
-    await start_services(shutdown_event)
+    await start_services(shutdown_event, error_reporter)
 
 
 if __name__ == "__main__":

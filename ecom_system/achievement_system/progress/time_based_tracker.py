@@ -3,9 +3,8 @@ from typing import Dict, Any, List, Optional
 import time
 
 from ecom_system.helpers.helpers import utc_now_ts
-from loggers.logger_setup import get_logger
 
-logger = get_logger("TimeBasedTracker", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class TimeBasedProgressTracker:

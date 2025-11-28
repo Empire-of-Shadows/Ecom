@@ -2,9 +2,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
-from loggers.logger_setup import get_logger
-
-logger = get_logger("MessagesTracker", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class MessagesProgressTracker:

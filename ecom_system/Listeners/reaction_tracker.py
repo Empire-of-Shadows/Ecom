@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict, deque
 from typing import List, Tuple, Dict
 
@@ -5,7 +6,7 @@ import discord
 from discord.ext import commands
 
 from ecom_system.helpers.helpers import utc_now_ts
-from loggers.logger_setup import get_logger, log_performance
+from loggers.log_factory import log_performance
 
 
 def _safe_channel_name(channel):
@@ -48,7 +49,7 @@ class EnhancedReactionTracker(commands.Cog):
         # =====================================================================
         # SECTION: Logging Setup
         # =====================================================================
-        self._log = get_logger("EnhancedReactionTracker")
+        self._log = logging.getLogger(__name__)
         self._log.info("reaction_tracker_initialized", extra={"event": "cog_init"})
 
         # =====================================================================

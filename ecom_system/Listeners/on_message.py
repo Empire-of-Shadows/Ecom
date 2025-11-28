@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Dict, Any
 
@@ -6,7 +7,7 @@ from discord.ext import commands
 from ecom_system.helpers.content_analyzer import ContentAnalyzer
 from ecom_system.helpers.rate_limiter import rate_limiter
 
-from loggers.logger_setup import log_performance, get_logger
+from loggers.log_factory import log_performance
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -98,7 +99,7 @@ class MessageListener(commands.Cog):
         self.activity_system = None  # Will be set from bot instance
         self.achievement_system = None  # Will be set from bot instance
         self.activity_buffer = None  # Will be set from bot instance
-        self.logger = get_logger("MessageListener")
+        self.logger = logging.getLogger(__name__)
 
     async def cog_load(self):
         """Initialize systems when cog loads."""

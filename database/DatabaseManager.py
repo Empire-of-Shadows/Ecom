@@ -10,13 +10,14 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ServerSelectionTimeoutError, ConfigurationError, OperationFailure
 from dotenv import load_dotenv
 
-from loggers.logger_setup import get_logger, PerformanceLogger, log_performance, log_context
+import logging
+from loggers.log_factory import PerformanceLogger, log_performance, log_context
 
 # Load environment variables
 load_dotenv()
 ECOM_DATABASE = os.getenv("ECOM_DATABASE")
 
-logger = get_logger("DatabaseManager", level=20, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConnectionError(Exception):

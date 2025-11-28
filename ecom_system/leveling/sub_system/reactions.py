@@ -4,9 +4,8 @@ from typing import Dict, Any
 from datetime import timezone
 
 from ecom_system.helpers.helpers import utc_now_ts
-from loggers.logger_setup import get_logger
 
-logger = get_logger("ReactionLeveling", level=logging.DEBUG, json_format=False, colored_console=True)
+logger = logging.getLogger(__name__)
 
 class ReactionLevelingSystem:
     """
@@ -140,5 +139,5 @@ class ReactionLevelingSystem:
             if final_embers > 0: update_owner["$inc"]["embers"] = round(final_embers)
             update_owner.setdefault("$set", {})["last_rewarded.got_reaction"] = now
             
-        await self.leveling_system.update_user_data(owner_id, guild_id, update_owner)
+        await self.level_system.update_user_data(owner_id, guild_id, update_owner)
         self.logger.debug(f"Processed owner rewards for G:{guild_id} U:{owner_id}")
