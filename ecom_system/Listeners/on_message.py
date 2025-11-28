@@ -171,7 +171,9 @@ class MessageListener(commands.Cog):
                     guild_id=guild_id,
                     message_content=message_content,
                     channel_id=channel_id,
-                    is_thread=analysis['is_thread']
+                    is_thread=analysis['is_thread'],
+                    has_attachments=analysis['has_attachments'],
+                    has_links=analysis['has_links']
                 )
 
             # Record comprehensive user activity in enhanced activity system

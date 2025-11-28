@@ -85,7 +85,9 @@ class MessageLevelingSystem:
             guild_id: str,
             message_content: str,
             channel_id: str = None,
-            is_thread: bool = False
+            is_thread: bool = False,
+            has_attachments: bool = False,
+            has_links: bool = False
     ) -> Optional[dict]:
         """
         Process a message and calculate rewards with comprehensive logging.
@@ -219,7 +221,7 @@ class MessageLevelingSystem:
             logger.debug("Step 6: Processing rewards and updating database...")
 
             result = await self.process_rewards(
-                user_id, guild_id, rewards, user_data, settings, channel_id
+                user_id, guild_id, rewards, user_data, settings, channel_id, has_attachments, has_links
             )
 
             processing_steps["database_update"]["completed"] = True
@@ -700,7 +702,9 @@ class MessageLevelingSystem:
             rewards: Dict,
             user_data: Dict,
             settings: Dict,
-            channel_id: str = None
+            channel_id: str = None,
+            has_attachments: bool = False,
+            has_links: bool = False
     ) -> Optional[Dict]:
         """
         Process rewards and update user data.
@@ -811,12 +815,15 @@ class MessageLevelingSystem:
                 },
                 "$inc": {
                     "message_stats.messages": 1,
+                    **({"message_stats.with_attachments": 1} if has_attachments else {}),
+                    **({"message_stats.with_links": 1} if has_links else {}),
+
                     "message_stats.today_xp": rewards.get("xp", 0),
                     "message_stats.today_embers": rewards.get("embers", 0),
                     "message_stats.weekly_xp": rewards.get("xp", 0),
                     "message_stats.weekly_embers": rewards.get("embers", 0),
                     "message_stats.monthly_xp": rewards.get("xp", 0),
-                    "message_stats.monthly_embers": rewards.get("embers", 0),
+                    "message_stats.monthly_embers": rewards.get("embers", 0)
                 }
             }
 

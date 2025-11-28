@@ -583,6 +583,8 @@ class LevelingSystem:
                 "last_message_time": 0,
                 "messages": 0,
                 "longest_message": 0,
+                "with_attachments": 0,
+                "with_links": 0,
                 "got_reactions": 0,
                 "reacted_messages": 0,
                 "average_message_length": 0,
