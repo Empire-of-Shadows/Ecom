@@ -516,6 +516,10 @@ class AchievementCommands(commands.Cog):
 				requirement_text = f"Receive **{threshold:,}** reactions"
 			elif condition_type == "attachment_messages":
 				requirement_text = f"Send **{threshold:,}** messages with attachments"
+			elif condition_type == "links_sent":
+				requirement_text = f"Send **{threshold:,}** links"
+			elif condition_type == "attachments_sent":
+				requirement_text = f"Send **{threshold:,}** attachments"
 			elif condition_type == "time_pattern":
 				tr = cond_data.get("time_range", conditions_obj.get("time_range", {})) or {}
 				start = tr.get("start", "?")
@@ -848,6 +852,21 @@ class AchievementCommands(commands.Cog):
 		}
 		return rarity_colors.get(rarity.lower(), discord.Color.light_grey())
 
+	def _get_nested_value(self, data: Dict, field_path: str, default=0):
+		"""Get nested dictionary value using dot notation (e.g., 'message_stats.messages')"""
+		try:
+			keys = field_path.split('.')
+			value = data
+			for key in keys:
+				if isinstance(value, dict) and key in value:
+					value = value[key]
+				else:
+					return default
+			return value if value is not None else default
+		except Exception as e:
+			self.logger.error(f"Error getting nested value for path '{field_path}': {e}")
+			return default
+
 	async def _get_current_value_for_achievement(self, achievement: Dict, user_data: Dict) -> int:
 		"""Get the current value for an achievement's progress tracking"""
 		# Prefer new schema, fall back to legacy
@@ -863,13 +882,18 @@ class AchievementCommands(commands.Cog):
 		elif condition_type == "voice_sessions":
 			return user_data.get("voice_stats", {}).get("sessions", 0)
 		elif condition_type == "daily_streak":
-			return user_data.get("message_stats", {}).get("daily_streak", 0)
+			field = conditions_obj.get('data', {}).get('field', 'daily_streak.count')
+			return self._get_nested_value(user_data, field)
 		elif condition_type == "reactions_given":
 			return user_data.get("message_stats", {}).get("reacted_messages", 0)
 		elif condition_type == "got_reactions":
 			return user_data.get("message_stats", {}).get("got_reactions", 0)
 		elif condition_type == "attachment_messages":
 			return user_data.get("message_stats", {}).get("attachment_messages", 0)
+		elif condition_type == "links_sent":
+			return user_data.get("message_stats", {}).get("links_sent", 0)
+		elif condition_type == "attachments_sent":
+			return user_data.get("message_stats", {}).get("attachments_sent", 0)
 		elif condition_type == "prestige_level":
 			# Reasonable default; adjust if your schema differs
 			return user_data.get("prestige", 0)

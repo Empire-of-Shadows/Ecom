@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 from ecom_system.helpers.content_analyzer import ContentAnalyzer
 from ecom_system.helpers.rate_limiter import rate_limiter
+from ecom_system.helpers.opt_out_helper import is_opted_out
 
 from loggers.log_factory import log_performance
 from dotenv import load_dotenv
@@ -25,10 +26,12 @@ def _analyze_message(message: discord.Message) -> Dict[str, Any]:
     """
     content = message.content or ""
 
-    analysis = {
+    # Get text-based analysis from the centralized analyzer
+    analysis = ContentAnalyzer.analyze_content(content)
+
+    # Supplement with message-object specific data
+    analysis.update({
         'length': len(content),
-        'word_count': len(content.split()) if content.strip() else 0,
-        'character_count': len(content),
         'has_attachments': len(message.attachments) > 0,
         'attachment_count': len(message.attachments),
         'has_embeds': len(message.embeds) > 0,
@@ -38,19 +41,15 @@ def _analyze_message(message: discord.Message) -> Dict[str, Any]:
         'channel_mention_count': len(message.channel_mentions),
         'is_reply': message.reference is not None,
         'is_thread': isinstance(message.channel, discord.Thread),
-        'emoji_count': ContentAnalyzer.count_emojis(content),
-        'link_count': ContentAnalyzer.count_links(content),
-        'has_links': False,
         'has_code_blocks': '```' in content,
         'has_inline_code': '`' in content and '```' not in content,
         'is_command': content.startswith(('!', '/', '$', '?', '.')) if content else False,
         'has_mentions': len(message.mentions) > 0 or len(message.role_mentions) > 0,
-        'is_caps': content.isupper() if content else False,
+        'is_caps': content.isupper() if content and len(content) > 10 else False,  # Check for caps only on longer messages
         'question_marks': content.count('?'),
         'exclamation_marks': content.count('!'),
-    }
+    })
 
-    analysis['has_links'] = analysis['link_count'] > 0
     analysis['total_mentions'] = (analysis['mention_count'] +
                                   analysis['role_mention_count'] +
                                   analysis['channel_mention_count'])
@@ -80,17 +79,6 @@ class MessageListener(commands.Cog):
     Enhanced message listener for leveling system and activity system integration.
     Handles message events and processes them through both systems with comprehensive tracking.
     """
-
-    # Regex patterns for content analysis
-    _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
-    _EMOJI_RE = re.compile(
-        r"("
-        r":[a-zA-Z0-9_~\-]+:"  # :custom_emoji:
-        r"|<a?:\w+:\d+>"  # <a:name:id> or <:name:id> (custom)
-        r"|[\U0001F300-\U0001F9FF]"  # Unicode emojis
-        r"|[\u2600-\u27BF]"  # Misc symbols
-        r")"
-    )
 
     def __init__(self, bot):
         """Initialize the message listener with a bot and systems."""
@@ -149,14 +137,18 @@ class MessageListener(commands.Cog):
         if not message.guild:
             return  # Ignore DMs
 
+        guild_id = str(message.guild.id)
+        user_id = str(message.author.id)
+
+        if await is_opted_out(user_id, guild_id):
+            return
+
         # Rate limiting check
         if not await rate_limiter.check_rate_limit(message):
             return  # Skip processing if rate limited
 
         try:
             # Extract message data
-            guild_id = str(message.guild.id)
-            user_id = str(message.author.id)
             channel_id = str(message.channel.id)
             message_content = message.content or ""
             message_length = len(message_content)

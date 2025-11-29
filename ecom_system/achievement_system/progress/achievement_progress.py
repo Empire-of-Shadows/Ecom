@@ -9,6 +9,7 @@ from ecom_system.achievement_system.progress.voice_tracker import VoiceProgressT
 from ecom_system.achievement_system.progress.reactions_tracker import ReactionsProgressTracker
 from ecom_system.achievement_system.progress.time_based_tracker import TimeBasedProgressTracker
 from ecom_system.achievement_system.progress.db_time_tracker import DBTimeProgressTracker
+from ecom_system.achievement_system.progress.streak_tracker import StreakProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,51 @@ class DBTimeProgressHandler:
             return {"category": "db_time", "achievements": [], "summary": {}}
 
 
+class StreakProgressHandler:
+    """Handler for streak-based achievements progress tracking"""
+
+    def __init__(self, progress_system):
+        """Initialize with reference to parent system"""
+        self.progress_system = progress_system
+        self.streak_tracker = StreakProgressTracker(progress_system)
+        self.logger = logger
+
+    async def update_progress(self, user_id: str, guild_id: str, activity_data: Dict,
+                              unearned_achievements: List[Dict]) -> Dict[str, Dict[str, Any]]:
+        """Update progress for streak-based achievements using StreakProgressTracker"""
+        try:
+            return await self.streak_tracker.update_progress(
+                user_id, guild_id, activity_data, unearned_achievements
+            )
+        except Exception as e:
+            logger.error(f"Error in streak progress handler: {e}", exc_info=True)
+            return {}
+
+    async def get_progress_summary(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                   unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        """Get progress summary for streak-based achievements"""
+        try:
+            return await self.streak_tracker.get_progress_summary(
+                user_id, guild_id, achievements, unlocked_ids, progress_data
+            )
+        except Exception as e:
+            logger.error(f"Error getting streak progress summary: {e}", exc_info=True)
+            return {"total": 0, "completed": 0, "in_progress": 0, "completion_percentage": 0.0}
+
+    async def get_detailed_progress(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                    unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        """Get detailed progress for streak-based achievements"""
+        try:
+            return await self.streak_tracker.get_detailed_progress(
+                user_id, guild_id, achievements, unlocked_ids, progress_data
+            )
+        except Exception as e:
+            logger.error(f"Error getting detailed streak progress: {e}", exc_info=True)
+            return {"category": "streak", "achievements": [], "summary": {}}
+
+
+
+
 class AchievementProgressSystem:
     """
     Standalone achievement progress tracking system.
@@ -363,6 +409,7 @@ class AchievementProgressSystem:
             "reactions": ReactionsProgressHandler(self),
             "time_based": TimeBasedProgressHandler(self),
             "db_time": DBTimeProgressHandler(self),
+            "streak": StreakProgressHandler(self),
             # Future categories can be added here
         }
         logger.info("🏆 AchievementProgressSystem initialized with specialized trackers")
@@ -493,6 +540,7 @@ class AchievementProgressSystem:
             # Update progress for each category
             progress_updates: Dict[str, Dict[str, Any]] = {}
 
+            # First, process categories that have direct handlers
             for category_name, handler in self.category_handlers.items():
                 try:
                     category_achievements = achievement_definitions.get(category_name, [])
@@ -513,6 +561,29 @@ class AchievementProgressSystem:
                 except Exception as e:
                     logger.error(f"Error updating progress for category {category_name}: {e}", exc_info=True)
                     continue
+
+            # Now handle achievements from categories without direct handlers (e.g., "engagement")
+            # by routing based on condition type
+            for category_name, achievements in achievement_definitions.items():
+                if category_name not in self.category_handlers:
+                    # This category doesn't have a direct handler, route by condition type
+                    try:
+                        routed_achievements = self._route_achievements_by_condition_type(achievements, unlocked_ids)
+
+                        for handler_name, ach_list in routed_achievements.items():
+                            if handler_name in self.category_handlers and ach_list:
+                                handler = self.category_handlers[handler_name]
+                                category_progress = await handler.update_progress(
+                                    user_id, guild_id, activity_data, ach_list
+                                )
+                                if category_progress:
+                                    # Merge with existing progress updates
+                                    if handler_name not in progress_updates:
+                                        progress_updates[handler_name] = {}
+                                    progress_updates[handler_name].update(category_progress)
+                    except Exception as e:
+                        logger.error(f"Error routing achievements from category {category_name}: {e}", exc_info=True)
+                        continue
 
             # Save progress updates to database
             if progress_updates:
@@ -561,6 +632,80 @@ class AchievementProgressSystem:
             return {"error": f"Failed to get progress for category {category}"}
 
     # ===== HELPER METHODS =====
+    def _route_achievements_by_condition_type(self, achievements: List[Dict], unlocked_ids: List[str]) -> Dict[str, List[Dict]]:
+        """
+        Route achievements to appropriate handlers based on their condition type.
+        This is used for categories that don't have direct handlers (e.g., "engagement").
+
+        Returns a dict mapping handler_name -> list of achievements
+        """
+        # Mapping of condition types to handler names
+        CONDITION_TYPE_TO_HANDLER = {
+            # Streak conditions
+            "daily_streak": "streak",
+
+            # Message conditions
+            "messages": "message",
+            "field": None,  # Field conditions need further inspection
+
+            # Voice conditions
+            "voice_time": "voice",
+            "voice_sessions": "voice",
+
+            # Reaction conditions
+            "reactions_given": "reactions",
+            "got_reactions": "reactions",
+
+            # Time-based conditions
+            "time_based": "time_based",
+            "time_pattern": "db_time",
+            "weekend_activity": "db_time",
+            "day_of_week": "db_time",
+            "day_of_month": "db_time",
+            "weekday_weekend": "db_time",
+
+            # Level conditions
+            "level_reached": "level",
+        }
+
+        routed = {}
+
+        for achievement in achievements:
+            # Skip already unlocked or disabled achievements
+            if achievement.get("id") in unlocked_ids or not achievement.get("enabled", True):
+                continue
+
+            conditions = achievement.get("conditions", {})
+            condition_type = conditions.get("type")
+
+            # Determine handler for this achievement
+            handler_name = None
+
+            if condition_type in CONDITION_TYPE_TO_HANDLER:
+                handler_name = CONDITION_TYPE_TO_HANDLER[condition_type]
+
+                # For "field" type, inspect the field to determine handler
+                if condition_type == "field":
+                    field = conditions.get("data", {}).get("field", "")
+                    if "message" in field.lower():
+                        handler_name = "message"
+                    elif "voice" in field.lower():
+                        handler_name = "voice"
+                    elif "reaction" in field.lower():
+                        handler_name = "reactions"
+                    elif "level" in field.lower():
+                        handler_name = "level"
+
+            # Add to routed list if handler found
+            if handler_name:
+                if handler_name not in routed:
+                    routed[handler_name] = []
+                routed[handler_name].append(achievement)
+            else:
+                logger.warning(f"Could not route achievement {achievement.get('id')} with condition type {condition_type}")
+
+        return routed
+
     async def _get_user_achievements(self, user_id: str, guild_id: str) -> Dict[str, Any]:
         """Get user achievements from database"""
         try:

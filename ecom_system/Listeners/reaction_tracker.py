@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 
 from ecom_system.helpers.helpers import utc_now_ts
+from ecom_system.helpers.opt_out_helper import is_opted_out
 from loggers.log_factory import log_performance
 
 
@@ -165,13 +166,19 @@ class EnhancedReactionTracker(commands.Cog):
             )
             return
 
+        guild_id_str = str(message.guild.id)
+        user_id_str = str(user.id)
+
+        if await is_opted_out(user_id_str, guild_id_str):
+            return
+
         # =====================================================================
         # SUBSECTION: Data Extraction
         # =====================================================================
-        guild_id = int(message.guild.id)
-        channel_id = int(message.channel.id)
-        reactor_id = int(user.id)
-        message_owner_id = int(message.author.id)
+        guild_id = message.guild.id
+        channel_id = message.channel.id
+        reactor_id = user.id
+        message_owner_id = message.author.id
 
         # =====================================================================
         # SUBSECTION: Spam Detection

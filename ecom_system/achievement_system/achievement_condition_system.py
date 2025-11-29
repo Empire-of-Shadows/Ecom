@@ -106,6 +106,12 @@ class AchievementConditionSystem:
             elif condition_type == "attachment_messages":
                 return self._check_field_condition(condition_data, user_data)
 
+            elif condition_type == "links_sent":
+                return self._check_field_condition(condition_data, user_data)
+
+            elif condition_type == "attachments_sent":
+                return self._check_field_condition(condition_data, user_data)
+
             # Quality conditions
             elif condition_type == "quality_streak":
                 return self._check_field_condition(condition_data, user_data)

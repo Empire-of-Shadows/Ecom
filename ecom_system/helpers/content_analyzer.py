@@ -1,73 +1,75 @@
 import re
-from typing import Dict, Any
+from typing import Dict
+from spellchecker import SpellChecker
+
+# Regular expression to find URLs
+URL_REGEX = r'(https?://[^\s]+)'
+# Regex to find standard Unicode emojis and custom Discord emojis
+EMOJI_RE = re.compile(
+    r'('
+    r'<a?:\w+:\d+>'  # Custom Discord emojis
+    r'|[\U0001F300-\U0001F9FF]'  # Common emoji block
+    r'|[\U0001F600-\U0001F64F]'  # Emoticons
+    r'|[\U0001F680-\U0001F6FF]'  # Transport & map symbols
+    r'|[\u2600-\u27BF]'  # Miscellaneous Symbols
+    r')'
+)
 
 
 class ContentAnalyzer:
     """
-    Shared content analysis utilities for message processing.
+    Analyzes message content for various properties like word count,
+    uniqueness, presence of links, emojis, etc.
     """
+    spell = SpellChecker()
 
-    # URL detection regex
-    URL_REGEX = re.compile(
-        r"https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:[\w.])*)?)?",
-        re.IGNORECASE
-    )
+    @staticmethod
+    def count_emojis(content: str) -> int:
+        """Counts standard and custom emojis in a string."""
+        return len(EMOJI_RE.findall(content))
 
-    # Emoji detection regex
-    EMOJI_REGEX = re.compile(
-        r"("
-        r":[a-zA-Z0-9_~\-]+:"  # :custom_emoji:
-        r"|<a?:\w+:\d+>"  # <a:name:id> or <:name:id> (custom)
-        r"|[\U0001F300-\U0001F9FF]"  # Unicode emojis
-        r"|[\u2600-\u27BF]"  # Misc symbols
-        r")"
-    )
+    @staticmethod
+    def count_links(content: str) -> int:
+        """Counts URLs in a string."""
+        return len(re.findall(URL_REGEX, content))
 
-    @classmethod
-    def count_emojis(cls, content: str) -> int:
-        """Count emojis in content."""
-        if not content:
-            return 0
-        try:
-            matches = cls.EMOJI_REGEX.findall(content)
-            return len(matches)
-        except Exception:
-            return 0
-
-    @classmethod
-    def count_links(cls, content: str) -> int:
-        """Count links in content."""
-        if not content:
-            return 0
-        try:
-            matches = cls.URL_REGEX.findall(content)
-            return len(matches)
-        except Exception:
-            return 0
-
-    @classmethod
-    def check_spam_patterns(cls, content: str) -> bool:
+    @staticmethod
+    def analyze_content(content: str) -> Dict[str, any]:
         """
-        Check for spam patterns in content.
-        Returns True if content is valid, False if spam detected.
+        Analyzes the message content and returns a dictionary of metrics.
+
+        Args:
+            content: The text content of the message.
+
+        Returns:
+            A dictionary with analysis results.
         """
-        if not content:
-            return True
+        tokens = re.findall(r'\b[a-zA-Z\'-]+\b', content.lower())
 
-        words = content.lower().split()
-        unique_words = set(words)
+        # Filter out nonsense words
+        known_words = ContentAnalyzer.spell.known(tokens)
+        misspelled = ContentAnalyzer.spell.unknown(tokens)
 
-        # Require at least 30% unique words
-        if len(unique_words) < max(1, len(words) * 0.3):
-            return False
+        real_words = list(known_words)
+        for word in misspelled:
+            # If a word has candidates, it's likely a misspelling, not nonsense
+            if ContentAnalyzer.spell.candidates(word):
+                real_words.append(word)
 
-        # Check for excessive caps
-        caps_ratio = sum(1 for c in content if c.isupper()) / len(content)
-        if caps_ratio > 0.7:  # 70% caps
-            return False
+        word_count = len(real_words)
+        unique_words = len(set(real_words))
+        character_count = len(content)
 
-        return True
+        # Link and emoji counting
+        links = re.findall(URL_REGEX, content)
+        emojis = EMOJI_RE.findall(content)
 
+        return {
+            "word_count": word_count,
+            "unique_words": unique_words,
+            "character_count": character_count,
+            "has_links": len(links) > 0,
+            "link_count": len(links),
+            "emoji_count": len(emojis),
+        }
 
-# Global instance
-content_analyzer = ContentAnalyzer()

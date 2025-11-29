@@ -251,3 +251,96 @@ class DBTimeProgressTracker:
         except Exception as e:
             self.logger.error(f"Error calculating weekday/weekend progress: {e}")
             return 0, threshold
+
+    async def get_progress_summary(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                   unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        """Get progress summary for DB-backed time-based achievements"""
+        try:
+            db_time_achievements = [ach for ach in achievements if self._is_db_time_achievement(ach)]
+
+            if not db_time_achievements:
+                return {
+                    "total": 0,
+                    "completed": 0,
+                    "in_progress": 0,
+                    "completion_percentage": 0.0
+                }
+
+            total = len(db_time_achievements)
+            completed = len([ach for ach in db_time_achievements if ach.get("id") in unlocked_ids])
+            in_progress = len([ach for ach in db_time_achievements
+                               if ach.get("id") in progress_data and ach.get("id") not in unlocked_ids])
+
+            completion_percentage = (completed / total * 100) if total > 0 else 0.0
+
+            return {
+                "total": total,
+                "completed": completed,
+                "in_progress": in_progress,
+                "completion_percentage": round(completion_percentage, 1)
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting DB time progress summary: {e}", exc_info=True)
+            return {"total": 0, "completed": 0, "in_progress": 0, "completion_percentage": 0.0}
+
+    async def get_detailed_progress(self, user_id: str, guild_id: str, achievements: List[Dict],
+                                    unlocked_ids: List[str], progress_data: Dict) -> Dict[str, Any]:
+        """Get detailed progress for DB-backed time-based achievements"""
+        try:
+            db_time_achievements = [ach for ach in achievements if self._is_db_time_achievement(ach)]
+
+            detailed_progress = {
+                "category": "db_time",
+                "achievements": [],
+                "summary": await self.get_progress_summary(user_id, guild_id, achievements, unlocked_ids, progress_data)
+            }
+
+            for achievement in db_time_achievements:
+                achievement_id = achievement.get("id")
+                conditions = achievement.get("conditions", {})
+                condition_type = conditions.get("type")
+                condition_data = conditions.get("data", {})
+
+                # Get current values for this achievement
+                try:
+                    current_value, target_value = await self._get_progress_values(
+                        condition_type, condition_data, user_id, guild_id
+                    )
+                except Exception as e:
+                    logger.error(f"Error getting progress values for {achievement_id}: {e}")
+                    current_value, target_value = 0, 1
+
+                # Check if unlocked
+                if achievement_id in unlocked_ids:
+                    status = "completed"
+                    progress_info = {
+                        "current_value": current_value,
+                        "target_value": target_value,
+                        "progress_percentage": 100.0
+                    }
+                elif achievement_id in progress_data:
+                    status = "in_progress"
+                    progress_info = progress_data[achievement_id]
+                else:
+                    status = "locked"
+                    progress_info = {
+                        "current_value": current_value,
+                        "target_value": target_value,
+                        "progress_percentage": min((current_value / target_value * 100),
+                                                   100.0) if target_value > 0 else 0.0
+                    }
+
+                detailed_progress["achievements"].append({
+                    "id": achievement_id,
+                    "name": achievement.get("name", achievement_id),
+                    "description": achievement.get("description", ""),
+                    "status": status,
+                    "progress": progress_info
+                })
+
+            return detailed_progress
+
+        except Exception as e:
+            logger.error(f"Error getting detailed DB time progress: {e}", exc_info=True)
+            return {"category": "db_time", "achievements": [], "summary": {}}

@@ -3,6 +3,7 @@ import logging
 from discord.ext import commands
 
 from ecom_system.helpers.helpers import utc_now_ts
+from ecom_system.helpers.opt_out_helper import is_opted_out
 from loggers.log_factory import log_performance
 
 
@@ -151,6 +152,9 @@ class VoiceListener(commands.Cog):
 
         user_id = str(member.id)
         guild_id = str(member.guild.id)
+
+        if await is_opted_out(user_id, guild_id):
+            return
 
         try:
             # Analyze the voice state change

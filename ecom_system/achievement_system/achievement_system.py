@@ -758,13 +758,18 @@ class AchievementSystem:
             elif condition_type == "voice_sessions":
                 current = user_data.get("voice_stats", {}).get("sessions", 0)
             elif condition_type == "daily_streak":
-                current = user_data.get("message_stats", {}).get("daily_streak", 0)
+                field = condition_data.get("field", "daily_streak.count")
+                current = self.condition_system._get_nested_value(user_data, field)
             elif condition_type == "reactions_given":
                 current = user_data.get("message_stats", {}).get("reacted_messages", 0)
             elif condition_type == "got_reactions":
                 current = user_data.get("message_stats", {}).get("got_reactions", 0)
             elif condition_type == "attachment_messages":
                 current = user_data.get("message_stats", {}).get("attachment_messages", 0)
+            elif condition_type == "links_sent":
+                current = user_data.get("message_stats", {}).get("links_sent", 0)
+            elif condition_type == "attachments_sent":
+                current = user_data.get("message_stats", {}).get("attachments_sent", 0)
             elif condition_type == "quality_streak":
                 current = user_data.get("message_stats", {}).get("quality_streak", 0)
             elif condition_type == "prestige_level":
