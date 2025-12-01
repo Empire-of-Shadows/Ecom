@@ -496,8 +496,8 @@ class AchievementProgressSystem:
                                 achievements_to_remove.append(achievement_id)
                                 logger.debug(f"Removing {achievement_id} from progress tracking - achievement unlocked")
                             else:
-                                logger.warning(
-                                    f"Achievement {achievement_id} shows 100% progress but is not unlocked for user {user_id} in guild {guild_id}."
+                                logger.debug(
+                                    f"Achievement {achievement_id} shows 100% progress (will be checked for unlock on next activity)"
                                 )
 
                 # Remove completed achievements from progress tracking
@@ -646,6 +646,8 @@ class AchievementProgressSystem:
 
             # Message conditions
             "messages": "message",
+            "attachment_messages": "message",
+            "quality_streak": "message",
             "field": None,  # Field conditions need further inspection
 
             # Voice conditions
@@ -666,17 +668,31 @@ class AchievementProgressSystem:
 
             # Level conditions
             "level_reached": "level",
+            "prestige_level": "level",
         }
 
         routed = {}
 
         for achievement in achievements:
+            # Skip achievements with invalid data
+            achievement_id = achievement.get("id")
+            if not achievement_id:
+                logger.debug(f"Skipping achievement with missing ID: {achievement}")
+                continue
+
             # Skip already unlocked or disabled achievements
-            if achievement.get("id") in unlocked_ids or not achievement.get("enabled", True):
+            if achievement_id in unlocked_ids or not achievement.get("enabled", True):
                 continue
 
             conditions = achievement.get("conditions", {})
+            if not conditions:
+                logger.debug(f"Skipping achievement {achievement_id} with missing conditions")
+                continue
+
             condition_type = conditions.get("type")
+            if not condition_type:
+                logger.debug(f"Skipping achievement {achievement_id} with missing condition type")
+                continue
 
             # Determine handler for this achievement
             handler_name = None
@@ -695,6 +711,8 @@ class AchievementProgressSystem:
                         handler_name = "reactions"
                     elif "level" in field.lower():
                         handler_name = "level"
+                    else:
+                        logger.debug(f"Could not determine handler for field-type achievement {achievement_id} with field '{field}'")
 
             # Add to routed list if handler found
             if handler_name:
@@ -702,7 +720,7 @@ class AchievementProgressSystem:
                     routed[handler_name] = []
                 routed[handler_name].append(achievement)
             else:
-                logger.warning(f"Could not route achievement {achievement.get('id')} with condition type {condition_type}")
+                logger.warning(f"Could not route achievement {achievement_id} with condition type {condition_type}")
 
         return routed
 

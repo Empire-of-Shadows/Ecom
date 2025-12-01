@@ -64,7 +64,22 @@ class ReactionsProgressTracker:
             if not field:
                 return None
 
-            current_value = user_stats.get("message_stats", {}).get(field, 0)
+            # Parse the field path (e.g., "message_stats.got_reactions" -> ["message_stats", "got_reactions"])
+            field_parts = field.split(".")
+
+            # Navigate through the nested structure
+            current_value = user_stats
+            for part in field_parts:
+                if isinstance(current_value, dict):
+                    current_value = current_value.get(part, 0)
+                else:
+                    current_value = 0
+                    break
+
+            # Ensure we have a numeric value
+            if not isinstance(current_value, (int, float)):
+                current_value = 0
+
             target_value = condition_data.get("threshold", 1)
 
             if target_value <= 0:
@@ -137,7 +152,22 @@ class ReactionsProgressTracker:
                 condition_data = conditions.get("data", {})
                 field = condition_data.get("field", "")
 
-                current_value = user_stats.get("message_stats", {}).get(field, 0)
+                # Parse the field path and navigate to get the value
+                current_value = user_stats
+                if field:
+                    field_parts = field.split(".")
+                    for part in field_parts:
+                        if isinstance(current_value, dict):
+                            current_value = current_value.get(part, 0)
+                        else:
+                            current_value = 0
+                            break
+                    # Ensure we have a numeric value
+                    if not isinstance(current_value, (int, float)):
+                        current_value = 0
+                else:
+                    current_value = 0
+
                 target_value = condition_data.get("threshold", 1)
 
                 # Check if unlocked

@@ -58,6 +58,63 @@ class ActivitySystem:
                               exc_info=True)
             raise
 
+    async def _ensure_user_document_exists(self, user_id: str, guild_id: str, timestamp: int):
+        """
+        Ensure a user document exists with proper array structure before incrementing.
+
+        This prevents MongoDB WriteError conflicts between $setOnInsert and $inc operations
+        on array fields.
+
+        Args:
+            user_id: User ID
+            guild_id: Guild ID
+            timestamp: Current timestamp for creation
+        """
+        try:
+            # Try to insert a new document with proper structure
+            # If document already exists, this will fail silently (expected)
+            await self.collection.update_one(
+                {"user_id": user_id, "guild_id": guild_id},
+                {
+                    "$setOnInsert": {
+                        "user_id": user_id,
+                        "guild_id": guild_id,
+                        "created_at": timestamp,
+                        "activity_patterns": {
+                            "hourly_pattern": [0] * 24,
+                            "weekly_pattern": [0] * 7,
+                            "activity_streak": 0,
+                            "longest_streak": 0,
+                            "most_active_hour": 0,
+                            "most_active_day": 0,
+                            "last_streak_date": ""
+                        },
+                        "activity_summary": {
+                            "total_activities": 0,
+                            "message_count": 0,
+                            "voice_minutes": 0.0,
+                            "reaction_count": 0,
+                            "total_voice_sessions": 0,
+                            "unique_channels": []
+                        },
+                        "quality_metrics": {
+                            "total_message_length": 0,
+                            "emoji_usage": 0,
+                            "link_shares": 0,
+                            "attachment_shares": 0,
+                            "thread_participation": 0,
+                            "custom_emoji_usage": 0,
+                            "unicode_emoji_usage": 0
+                        },
+                        "daily_stats": {}
+                    }
+                },
+                upsert=True
+            )
+        except Exception as e:
+            # If there's an error here, log it but don't fail the activity recording
+            self.logger.debug(f"Document ensure operation for {user_id}: {e}")
+
     async def _create_indexes(self):
         """
         Create comprehensive indexes for efficient querying across all activity patterns.
@@ -143,6 +200,10 @@ class ActivitySystem:
         activity_details = activity_data or {}
 
         try:
+            # Ensure document exists with proper array structure
+            # This prevents MongoDB conflict errors between $setOnInsert and $inc on array fields
+            await self._ensure_user_document_exists(user_id, guild_id, current_timestamp)
+
             # Build the update operations dictionary.
             # Start with operators that are always present.
             update_operations = {
@@ -153,13 +214,7 @@ class ActivitySystem:
                     "last_activity_date": current_date,
                     "updated_at": current_timestamp
                 },
-                # Set fields only on the first-ever activity for the user
-                "$setOnInsert": {
-                    "user_id": user_id,
-                    "guild_id": guild_id,
-                    "created_at": current_timestamp,
-                },
-                # Increment counters
+                # Increment counters (arrays now exist from ensure_document)
                 "$inc": {
                     "activity_summary.total_activities": 1,
                     f"activity_patterns.hourly_pattern.{current_hour}": 1,
@@ -386,6 +441,10 @@ class ActivitySystem:
         try:
             activity_summary = user_activity.get("activity_summary", {})
             quality_metrics = user_activity.get("quality_metrics", {})
+            activity_patterns = user_activity.get("activity_patterns", {})
+
+            # Normalize activity patterns to ensure arrays are in correct format
+            activity_patterns = self._normalize_activity_patterns(activity_patterns)
 
             # Calculate average message length
             total_messages = activity_summary.get("message_count", 0)
@@ -412,8 +471,27 @@ class ActivitySystem:
                 total_days = max((last_activity - created_at) / 86400, 1)
                 activity_summary["activities_per_day"] = total_activities / total_days
 
+            # Add time-of-day breakdown
+            hourly_pattern = activity_patterns.get("hourly_pattern", [])
+            if hourly_pattern:
+                activity_patterns["time_of_day_breakdown"] = self.analyze_time_of_day_distribution(hourly_pattern)
+
+            # Add weekend vs weekday breakdown
+            weekly_pattern = activity_patterns.get("weekly_pattern", [])
+            if len(weekly_pattern) == 7:
+                weekday_total = sum(weekly_pattern[:5])  # Mon-Fri
+                weekend_total = sum(weekly_pattern[5:])  # Sat-Sun
+                activity_patterns["weekend_vs_weekday"] = {
+                    "weekday_total": weekday_total,
+                    "weekend_total": weekend_total,
+                    "weekday_percentage": round((weekday_total / max(weekday_total + weekend_total, 1)) * 100, 1),
+                    "weekend_percentage": round((weekend_total / max(weekday_total + weekend_total, 1)) * 100, 1),
+                    "prefers_weekend": weekend_total > weekday_total
+                }
+
             user_activity["activity_summary"] = activity_summary
             user_activity["quality_metrics"] = quality_metrics
+            user_activity["activity_patterns"] = activity_patterns
 
             return user_activity
 
@@ -732,6 +810,17 @@ class ActivitySystem:
             users_with_streaks = data.get("users_with_streaks", 0)
             streak_participation = (users_with_streaks / max(total_users, 1)) * 100
 
+            # Aggregate hourly patterns for time-of-day analysis
+            hourly_activity = data.get("hourly_activity", [])
+            guild_hourly_pattern = [0] * 24
+            for user_pattern in hourly_activity:
+                if len(user_pattern) == 24:
+                    for i, count in enumerate(user_pattern):
+                        guild_hourly_pattern[i] += count
+
+            # Get time-of-day breakdown
+            time_of_day_data = self.analyze_time_of_day_distribution(guild_hourly_pattern)
+
             return {
                 "guild_id": guild_id,
                 "analysis_period_days": days,
@@ -745,6 +834,7 @@ class ActivitySystem:
                 },
                 "trends": {
                     "peak_activity_times": self._analyze_hourly_patterns(data.get("hourly_activity", [])),
+                    "time_of_day_breakdown": time_of_day_data,
                     "weekly_distribution": self._analyze_weekly_patterns(data.get("weekly_activity", [])),
                     "engagement_level": self._calculate_engagement_level(data)
                 },
@@ -838,6 +928,399 @@ class ActivitySystem:
 
         except Exception:
             return "unknown"
+
+    # Data Normalization Methods
+
+    @staticmethod
+    def _normalize_pattern_to_array(pattern_data: Union[Dict, List], expected_length: int) -> List[int]:
+        """
+        Normalize pattern data to array format.
+
+        Handles legacy object format: {"0": 3, "1": 5, ...}
+        Converts to array format: [3, 5, ...]
+
+        Args:
+            pattern_data: Pattern data (can be dict or list)
+            expected_length: Expected array length (24 for hourly, 7 for weekly)
+
+        Returns:
+            List of integers with specified length
+        """
+        # If already a list of correct length, return it
+        if isinstance(pattern_data, list):
+            if len(pattern_data) == expected_length:
+                return pattern_data
+            else:
+                # Wrong length, return zeros
+                return [0] * expected_length
+
+        # If it's a dict (legacy format), convert to array
+        if isinstance(pattern_data, dict):
+            result = [0] * expected_length
+            for key, value in pattern_data.items():
+                try:
+                    index = int(key)
+                    if 0 <= index < expected_length:
+                        result[index] = int(value) if value else 0
+                except (ValueError, TypeError):
+                    continue
+            return result
+
+        # Invalid format, return zeros
+        return [0] * expected_length
+
+    def _normalize_activity_patterns(self, activity_patterns: Dict) -> Dict:
+        """
+        Normalize activity patterns to ensure arrays are in correct format.
+
+        Args:
+            activity_patterns: Raw activity patterns from database
+
+        Returns:
+            Normalized activity patterns with arrays
+        """
+        if not activity_patterns:
+            return activity_patterns
+
+        # Normalize hourly pattern
+        if "hourly_pattern" in activity_patterns:
+            activity_patterns["hourly_pattern"] = self._normalize_pattern_to_array(
+                activity_patterns["hourly_pattern"], 24
+            )
+
+        # Normalize weekly pattern
+        if "weekly_pattern" in activity_patterns:
+            activity_patterns["weekly_pattern"] = self._normalize_pattern_to_array(
+                activity_patterns["weekly_pattern"], 7
+            )
+
+        return activity_patterns
+
+    # Time-of-Day and Weekend/Weekday Categorization Methods
+
+    @staticmethod
+    def categorize_hour_to_time_of_day(hour: int) -> str:
+        """
+        Categorize an hour (0-23) into a time-of-day period.
+
+        Args:
+            hour: Hour in 24-hour format (0-23)
+
+        Returns:
+            Time period: 'morning', 'afternoon', 'evening', 'night', or 'overnight'
+        """
+        if 6 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 18:
+            return "afternoon"
+        elif 18 <= hour < 23:
+            return "evening"
+        elif hour == 23 or hour < 2:
+            return "night"
+        else:  # 2-5
+            return "overnight"
+
+    @staticmethod
+    def categorize_weekday(weekday: int) -> str:
+        """
+        Categorize a weekday (0-6) into 'weekend' or 'weekday'.
+
+        Args:
+            weekday: Day of week (0=Monday, 6=Sunday)
+
+        Returns:
+            'weekend' or 'weekday'
+        """
+        return "weekend" if weekday in [5, 6] else "weekday"
+
+    def analyze_time_of_day_distribution(self, hourly_pattern: List[int]) -> Dict[str, Any]:
+        """
+        Analyze hourly activity pattern and break it down by time-of-day periods.
+
+        Args:
+            hourly_pattern: List of 24 integers representing activity by hour
+
+        Returns:
+            Dictionary with time-of-day breakdowns and insights
+        """
+        try:
+            if not hourly_pattern or len(hourly_pattern) != 24:
+                return self._empty_time_of_day_distribution()
+
+            # Initialize period counters
+            periods = {
+                "morning": 0,      # 6-11
+                "afternoon": 0,    # 12-17
+                "evening": 0,      # 18-22
+                "night": 0,        # 23-1
+                "overnight": 0     # 2-5
+            }
+
+            # Sum activities by period
+            for hour, activity_count in enumerate(hourly_pattern):
+                period = self.categorize_hour_to_time_of_day(hour)
+                periods[period] += activity_count
+
+            total_activities = sum(periods.values())
+
+            # Calculate percentages
+            percentages = {}
+            for period, count in periods.items():
+                percentages[period] = round((count / max(total_activities, 1)) * 100, 1)
+
+            # Find most and least active periods
+            sorted_periods = sorted(periods.items(), key=lambda x: x[1], reverse=True)
+            most_active_period = sorted_periods[0][0] if sorted_periods else "unknown"
+            least_active_period = sorted_periods[-1][0] if sorted_periods else "unknown"
+
+            return {
+                "total_activities": total_activities,
+                "by_period": periods,
+                "percentages": percentages,
+                "most_active_period": most_active_period,
+                "least_active_period": least_active_period,
+                "sorted_periods": [period for period, _ in sorted_periods]
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error analyzing time-of-day distribution: {e}")
+            return self._empty_time_of_day_distribution()
+
+    def _empty_time_of_day_distribution(self) -> Dict[str, Any]:
+        """Return empty time-of-day distribution structure."""
+        return {
+            "total_activities": 0,
+            "by_period": {
+                "morning": 0,
+                "afternoon": 0,
+                "evening": 0,
+                "night": 0,
+                "overnight": 0
+            },
+            "percentages": {
+                "morning": 0.0,
+                "afternoon": 0.0,
+                "evening": 0.0,
+                "night": 0.0,
+                "overnight": 0.0
+            },
+            "most_active_period": "unknown",
+            "least_active_period": "unknown",
+            "sorted_periods": []
+        }
+
+    async def get_user_time_of_day_breakdown(self, user_id: str, guild_id: str) -> Dict[str, Any]:
+        """
+        Get detailed time-of-day activity breakdown for a specific user.
+
+        Args:
+            user_id: User ID to analyze
+            guild_id: Guild ID context
+
+        Returns:
+            Comprehensive time-of-day analysis for the user
+        """
+        try:
+            user_activity = await self.collection.find_one(
+                {"user_id": user_id, "guild_id": guild_id},
+                {"activity_patterns": 1, "activity_summary": 1}
+            )
+
+            if not user_activity:
+                return {
+                    "user_id": user_id,
+                    "guild_id": guild_id,
+                    "error": "User not found",
+                    "time_of_day_breakdown": self._empty_time_of_day_distribution()
+                }
+
+            activity_patterns = user_activity.get("activity_patterns", {})
+            # Normalize patterns to ensure they're arrays
+            activity_patterns = self._normalize_activity_patterns(activity_patterns)
+            hourly_pattern = activity_patterns.get("hourly_pattern", [0] * 24)
+
+            time_of_day_data = self.analyze_time_of_day_distribution(hourly_pattern)
+
+            # Add contextual information
+            most_active_hour = activity_patterns.get("most_active_hour", 0)
+            time_of_day_data["most_active_hour"] = most_active_hour
+            time_of_day_data["most_active_hour_period"] = self.categorize_hour_to_time_of_day(most_active_hour)
+
+            return {
+                "user_id": user_id,
+                "guild_id": guild_id,
+                "time_of_day_breakdown": time_of_day_data,
+                "hourly_pattern": hourly_pattern
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting user time-of-day breakdown: {e}", exc_info=True)
+            return {
+                "user_id": user_id,
+                "guild_id": guild_id,
+                "error": str(e),
+                "time_of_day_breakdown": self._empty_time_of_day_distribution()
+            }
+
+    async def get_guild_time_of_day_insights(self, guild_id: str, days: int = 7) -> Dict[str, Any]:
+        """
+        Get guild-wide time-of-day activity insights.
+
+        Args:
+            guild_id: Guild to analyze
+            days: Number of days to look back
+
+        Returns:
+            Comprehensive time-of-day insights for the entire guild
+        """
+        try:
+            cutoff_timestamp = int(time.time()) - (days * 24 * 60 * 60)
+
+            # Fetch all active users' hourly patterns
+            cursor = self.collection.find(
+                {
+                    "guild_id": guild_id,
+                    "last_activity_timestamp": {"$gte": cutoff_timestamp}
+                },
+                {"activity_patterns.hourly_pattern": 1}
+            )
+
+            # Aggregate hourly patterns across all users
+            guild_hourly_pattern = [0] * 24
+            user_count = 0
+
+            async for doc in cursor:
+                activity_patterns = doc.get("activity_patterns", {})
+                # Normalize patterns to handle legacy object format
+                activity_patterns = self._normalize_activity_patterns(activity_patterns)
+                hourly_pattern = activity_patterns.get("hourly_pattern", [])
+                if len(hourly_pattern) == 24:
+                    for i, count in enumerate(hourly_pattern):
+                        guild_hourly_pattern[i] += count
+                    user_count += 1
+
+            if user_count == 0:
+                return {
+                    "guild_id": guild_id,
+                    "period_days": days,
+                    "active_users": 0,
+                    "time_of_day_breakdown": self._empty_time_of_day_distribution()
+                }
+
+            # Analyze the aggregated pattern
+            time_of_day_data = self.analyze_time_of_day_distribution(guild_hourly_pattern)
+
+            # Find peak hour
+            peak_hour = guild_hourly_pattern.index(max(guild_hourly_pattern))
+
+            return {
+                "guild_id": guild_id,
+                "period_days": days,
+                "active_users": user_count,
+                "time_of_day_breakdown": time_of_day_data,
+                "peak_hour": peak_hour,
+                "peak_hour_period": self.categorize_hour_to_time_of_day(peak_hour),
+                "hourly_pattern": guild_hourly_pattern,
+                "generated_at": int(time.time())
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting guild time-of-day insights: {e}", exc_info=True)
+            return {
+                "guild_id": guild_id,
+                "error": str(e),
+                "time_of_day_breakdown": self._empty_time_of_day_distribution()
+            }
+
+    # Database Migration and Maintenance Methods
+
+    async def migrate_patterns_to_arrays(self, dry_run: bool = True) -> Dict[str, Any]:
+        """
+        Migrate hourly_pattern and weekly_pattern from object format to array format.
+
+        This method fixes documents that have patterns stored as objects:
+        {"0": 3, "1": 5, ...} -> [3, 5, ...]
+
+        Args:
+            dry_run: If True, only report what would be changed without modifying data
+
+        Returns:
+            Migration statistics
+        """
+        if self.collection is None:
+            self.logger.error("Cannot migrate: collection is not initialized.")
+            return {"error": "Collection not initialized"}
+
+        self.logger.info(f"Starting pattern migration (dry_run={dry_run})...")
+
+        stats = {
+            "total_documents": 0,
+            "documents_needing_migration": 0,
+            "hourly_pattern_migrated": 0,
+            "weekly_pattern_migrated": 0,
+            "errors": 0,
+            "dry_run": dry_run
+        }
+
+        try:
+            # Find all documents with activity patterns
+            cursor = self.collection.find({"activity_patterns": {"$exists": True}})
+
+            async for doc in cursor:
+                stats["total_documents"] += 1
+                doc_id = doc["_id"]
+                needs_migration = False
+                update_fields = {}
+
+                activity_patterns = doc.get("activity_patterns", {})
+
+                # Check hourly pattern
+                hourly_pattern = activity_patterns.get("hourly_pattern")
+                if hourly_pattern and isinstance(hourly_pattern, dict):
+                    needs_migration = True
+                    normalized_hourly = self._normalize_pattern_to_array(hourly_pattern, 24)
+                    update_fields["activity_patterns.hourly_pattern"] = normalized_hourly
+                    stats["hourly_pattern_migrated"] += 1
+                    self.logger.debug(f"Document {doc_id}: hourly_pattern needs migration")
+
+                # Check weekly pattern
+                weekly_pattern = activity_patterns.get("weekly_pattern")
+                if weekly_pattern and isinstance(weekly_pattern, dict):
+                    needs_migration = True
+                    normalized_weekly = self._normalize_pattern_to_array(weekly_pattern, 7)
+                    update_fields["activity_patterns.weekly_pattern"] = normalized_weekly
+                    stats["weekly_pattern_migrated"] += 1
+                    self.logger.debug(f"Document {doc_id}: weekly_pattern needs migration")
+
+                if needs_migration:
+                    stats["documents_needing_migration"] += 1
+
+                    if not dry_run:
+                        try:
+                            await self.collection.update_one(
+                                {"_id": doc_id},
+                                {"$set": update_fields}
+                            )
+                            self.logger.debug(f"✓ Migrated document {doc_id}")
+                        except Exception as e:
+                            stats["errors"] += 1
+                            self.logger.error(f"✗ Error migrating document {doc_id}: {e}")
+
+            self.logger.info(
+                f"Migration {'simulation' if dry_run else 'complete'}:\n"
+                f"  Total documents: {stats['total_documents']}\n"
+                f"  Need migration: {stats['documents_needing_migration']}\n"
+                f"  Hourly patterns: {stats['hourly_pattern_migrated']}\n"
+                f"  Weekly patterns: {stats['weekly_pattern_migrated']}\n"
+                f"  Errors: {stats['errors']}"
+            )
+
+            return stats
+
+        except Exception as e:
+            self.logger.error(f"Error during migration: {e}", exc_info=True)
+            stats["error"] = str(e)
+            return stats
 
     # Backward compatibility and utility methods
 

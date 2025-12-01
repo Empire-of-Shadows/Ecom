@@ -28,6 +28,22 @@ class DBTimeProgressTracker:
         self.WEEKDAYS = [1, 2, 3, 4, 5]
         self.WEEKENDS = [0, 6]
 
+    def _has_local_db(self) -> bool:
+        """Check if local SQLite database is available."""
+        try:
+            if not (hasattr(self.progress_system, 'db') and
+                    hasattr(self.progress_system.db, 'local_db_path')):
+                return False
+
+            path = self.progress_system.db.local_db_path
+            # Check if path is None or the string "None" or empty
+            if path is None or str(path).strip() in ('None', ''):
+                return False
+
+            return True
+        except Exception:
+            return False
+
     async def update_progress(self, user_id: str, guild_id: str, activity_data: Dict,
                               unearned_achievements: List[Dict]) -> Dict[str, Dict[str, Any]]:
         """
@@ -97,6 +113,11 @@ class DBTimeProgressTracker:
         """Calculates progress for time pattern conditions from local database data."""
         threshold = condition_data.get("threshold", 10)
         try:
+            # Check if local DB is available
+            if not self._has_local_db():
+                self.logger.debug("Local SQLite database not available for time pattern tracking")
+                return 0, threshold
+
             time_range = condition_data.get("time_range", {})
             if not time_range or "start" not in time_range or "end" not in time_range:
                 return 0, threshold
@@ -141,6 +162,11 @@ class DBTimeProgressTracker:
         """Calculates progress for weekend activity conditions from local database data."""
         threshold = condition_data.get("threshold", 8)
         try:
+            # Check if local DB is available
+            if not self._has_local_db():
+                self.logger.debug("Local SQLite database not available for weekend activity tracking")
+                return 0, threshold
+
             min_activity_per_weekend = condition_data.get("min_activity_per_weekend", 10)
             async with aiosqlite.connect(self.progress_system.db.local_db_path) as db:
                 cursor = await db.execute("""
@@ -164,6 +190,11 @@ class DBTimeProgressTracker:
         """Calculates progress for day of week conditions from local database data."""
         threshold = condition_data.get("threshold", 1)
         try:
+            # Check if local DB is available
+            if not self._has_local_db():
+                self.logger.debug("Local SQLite database not available for day of week tracking")
+                return 0, threshold
+
             days = condition_data.get("days", [])
             min_activity_per_day = condition_data.get("min_activity_per_day", 1)
             if not days:
@@ -195,6 +226,11 @@ class DBTimeProgressTracker:
         """Calculates progress for day of month conditions from local database data."""
         threshold = condition_data.get("threshold", 1)
         try:
+            # Check if local DB is available
+            if not self._has_local_db():
+                self.logger.debug("Local SQLite database not available for day of month tracking")
+                return 0, threshold
+
             days_of_month = condition_data.get("days_of_month", [])
             min_activity_per_day = condition_data.get("min_activity_per_day", 1)
             if not days_of_month:
@@ -225,6 +261,11 @@ class DBTimeProgressTracker:
         """Calculates progress for weekday vs weekend conditions from local database data."""
         threshold = condition_data.get("threshold", 1)
         try:
+            # Check if local DB is available
+            if not self._has_local_db():
+                self.logger.debug("Local SQLite database not available for weekday/weekend tracking")
+                return 0, threshold
+
             day_type = condition_data.get("day_type", "weekday")
             min_activity_per_day = condition_data.get("min_activity_per_day", 1)
 

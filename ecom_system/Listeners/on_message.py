@@ -29,6 +29,12 @@ def _analyze_message(message: discord.Message) -> Dict[str, Any]:
     # Get text-based analysis from the centralized analyzer
     analysis = ContentAnalyzer.analyze_content(content)
 
+    # Check if user is thread creator
+    is_thread = isinstance(message.channel, discord.Thread)
+    is_thread_creator = False
+    if is_thread:
+        is_thread_creator = message.channel.owner_id == message.author.id
+
     # Supplement with message-object specific data
     analysis.update({
         'length': len(content),
@@ -40,7 +46,8 @@ def _analyze_message(message: discord.Message) -> Dict[str, Any]:
         'role_mention_count': len(message.role_mentions),
         'channel_mention_count': len(message.channel_mentions),
         'is_reply': message.reference is not None,
-        'is_thread': isinstance(message.channel, discord.Thread),
+        'is_thread': is_thread,
+        'is_thread_creator': is_thread_creator,
         'has_code_blocks': '```' in content,
         'has_inline_code': '`' in content and '```' not in content,
         'is_command': content.startswith(('!', '/', '$', '?', '.')) if content else False,
@@ -164,6 +171,7 @@ class MessageListener(commands.Cog):
                     message_content=message_content,
                     channel_id=channel_id,
                     is_thread=analysis['is_thread'],
+                    is_thread_creator=analysis['is_thread_creator'],
                     has_attachments=analysis['has_attachments'],
                     has_links=analysis['has_links']
                 )

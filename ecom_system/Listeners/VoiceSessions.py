@@ -17,18 +17,24 @@ class VoiceSession:
     # Core session tracking
     start_time: float
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    channel_id: Optional[str] = None  # Voice channel ID for channel-specific bonuses
+    participant_count: int = 0  # Number of members in channel (excluding bots)
 
     # Current state flags
     is_muted: bool = False
     is_deafened: bool = False
     is_self_muted: bool = False
     is_self_deafened: bool = False
+    is_streaming: bool = False  # Screen sharing (self_stream)
+    is_video: bool = False      # Camera on (self_video)
 
     # Cumulative time tracking (in seconds)
     muted_time: float = 0.0
     deafened_time: float = 0.0
     self_muted_time: float = 0.0
     self_deafened_time: float = 0.0
+    streaming_time: float = 0.0  # Time spent streaming
+    video_time: float = 0.0      # Time spent with camera on
 
     # Timestamp management
     last_state_change: float = field(init=False)
@@ -65,6 +71,10 @@ class VoiceSession:
                 self.self_muted_time += time_since_update
             if self.is_self_deafened:
                 self.self_deafened_time += time_since_update
+            if self.is_streaming:
+                self.streaming_time += time_since_update
+            if self.is_video:
+                self.video_time += time_since_update
 
             self.last_update_time = current_time
             logger.debug(f"🔄 VoiceSession state times updated for {self.session_id}")
@@ -78,7 +88,9 @@ class VoiceSession:
             deafened: bool,
             self_muted: bool,
             self_deafened: bool,
-            update_time: float
+            update_time: float,
+            streaming: bool = False,
+            video: bool = False
     ) -> None:
         """
         Update voice state flags and accumulate time for previous state.
@@ -92,7 +104,9 @@ class VoiceSession:
                     self.is_muted != muted or
                     self.is_deafened != deafened or
                     self.is_self_muted != self_muted or
-                    self.is_self_deafened != self_deafened
+                    self.is_self_deafened != self_deafened or
+                    self.is_streaming != streaming or
+                    self.is_video != video
             )
 
             if state_changed:
@@ -101,6 +115,8 @@ class VoiceSession:
                 self.is_deafened = deafened
                 self.is_self_muted = self_muted
                 self.is_self_deafened = self_deafened
+                self.is_streaming = streaming
+                self.is_video = video
 
                 self.last_state_change = update_time
 
@@ -186,6 +202,13 @@ class VoiceSession:
             # Engagement score (0.0 to 1.0) based on active participation
             engagement_score = min(1.0, active_duration / max(1, total_duration))
 
+            # Calculate streaming/video percentages
+            if total_duration > 0:
+                streaming_percentage = (self.streaming_time / total_duration) * 100
+                video_percentage = (self.video_time / total_duration) * 100
+            else:
+                streaming_percentage = video_percentage = 0.0
+
             metrics = {
                 # Core durations
                 "voice_seconds": total_duration,
@@ -198,15 +221,22 @@ class VoiceSession:
                 "deafened_time": self.deafened_time,
                 "self_muted_time": self.self_muted_time,
                 "self_deafened_time": self.self_deafened_time,
+                "streaming_time": self.streaming_time,
+                "video_time": self.video_time,
 
                 # Percentages
                 "total_active_percentage": active_percentage,
                 "total_audible_percentage": audible_percentage,
                 "total_speakable_percentage": speakable_percentage,
+                "streaming_percentage": streaming_percentage,
+                "video_percentage": video_percentage,
 
                 # Engagement metrics
                 "engagement_score": engagement_score,
                 "is_currently_active": self.is_active(),
+
+                # Social metrics
+                "participant_count": self.participant_count,
 
                 # Session metadata
                 "session_id": self.session_id,

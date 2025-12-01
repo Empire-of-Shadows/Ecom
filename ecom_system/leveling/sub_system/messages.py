@@ -38,7 +38,8 @@ logger = logging.getLogger(__name__)
 #
 # 3. CHANNEL CONFIGURATIONS (settings.message.*)
 #    - channel_bonuses: {} - Per-channel XP/Ember multipliers
-#    - thread_bonus: 1.1 - Bonus for thread messages
+#    - thread_bonus: 1.15 - Bonus for thread messages (15% bonus)
+#    - thread_starter_bonus: 1.25 - Extra bonus for thread creators (25% bonus, stacks with thread_bonus)
 #    - disabled_channels: [] - Channels to ignore
 #    - premium_channels: {} - Special channel multipliers
 #    - channel_caps: {} - Per-channel daily limits
@@ -86,6 +87,7 @@ class MessageLevelingSystem:
             message_content: str,
             channel_id: str = None,
             is_thread: bool = False,
+            is_thread_creator: bool = False,
             has_attachments: bool = False,
             has_links: bool = False
     ) -> Optional[dict]:
@@ -110,6 +112,8 @@ class MessageLevelingSystem:
                 logger.debug(f"  📍 Channel ID: {channel_id}")
             if is_thread:
                 logger.debug("  🧵 Message is in a thread")
+                if is_thread_creator:
+                    logger.debug("  👑 User is the thread creator")
 
             # =================================================================
             # STEP 1: Anti-cheat validation
@@ -121,7 +125,7 @@ class MessageLevelingSystem:
                 processing_steps["anti_cheat"]["duration_ms"] = (time.time() - step_start) * 1000
                 logger.warning(f"🚫 Message blocked by anti-cheat: G:{guild_id} U:{user_id}")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        is_thread=is_thread, reason="Anti-cheat violation")
+                                        is_thread=is_thread, is_thread_creator=is_thread_creator, reason="Anti-cheat violation")
                 return None
 
             processing_steps["anti_cheat"]["passed"] = True
@@ -155,7 +159,7 @@ class MessageLevelingSystem:
             logger.debug("Step 3: Validating message...")
 
             message_length = len(message_content)
-            validation_result = await self.validate_message(message_length, settings, user_data)
+            validation_result = await self.validate_message(message_length, settings, user_data, channel_id, has_attachments)
 
             processing_steps["validation"]["duration_ms"] = (time.time() - step_start) * 1000
 
@@ -163,7 +167,7 @@ class MessageLevelingSystem:
                 processing_steps["validation"]["reason"] = validation_result["reason"]
                 logger.info(f"  ❌ Validation failed: {validation_result['reason']}")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        is_thread=is_thread, settings=settings, reason=validation_result["reason"])
+                                        is_thread=is_thread, is_thread_creator=is_thread_creator, settings=settings, reason=validation_result["reason"])
                 return validation_result.get("result")
 
             processing_steps["validation"]["passed"] = True
@@ -175,7 +179,7 @@ class MessageLevelingSystem:
             step_start = time.time()
             logger.debug("Step 4: Analyzing message content...")
 
-            content_analysis = self.analyze_message_content(message_content, settings)
+            content_analysis = self.analyze_message_content(message_content, settings, has_attachments)
 
             processing_steps["content_analysis"]["completed"] = True
             processing_steps["content_analysis"]["duration_ms"] = (time.time() - step_start) * 1000
@@ -185,8 +189,16 @@ class MessageLevelingSystem:
             logger.info(f"    • Word count: {content_analysis['word_count']}")
             logger.info(f"    • Emojis: {content_analysis['emoji_count']}")
             logger.info(f"    • Links: {content_analysis['link_count']}")
+            if has_attachments:
+                logger.info(f"    • Attachments: Yes")
+            if content_analysis.get('bonuses'):
+                bonuses_str = ", ".join([f"{k}: {v:.2f}x" for k, v in content_analysis['bonuses'].items()])
+                logger.info(f"    • Bonuses: {bonuses_str}")
+            if content_analysis.get('penalties'):
+                penalties_str = ", ".join([f"{k}: {v:.2f}x" for k, v in content_analysis['penalties'].items()])
+                logger.info(f"    • Penalties: {penalties_str}")
             if content_analysis['factors']:
-                logger.info(f"    • Bonuses applied: {', '.join(content_analysis['factors'])}")
+                logger.info(f"    • Quality factors: {', '.join(content_analysis['factors'])}")
             logger.debug(f"  ✅ Analysis complete ({processing_steps['content_analysis']['duration_ms']:.2f}ms)")
 
             # =================================================================
@@ -196,7 +208,7 @@ class MessageLevelingSystem:
             logger.debug("Step 5: Calculating rewards...")
 
             rewards = await self.calculate_message_rewards(
-                message_length, user_data, settings, content_analysis, channel_id, is_thread
+                message_length, user_data, settings, content_analysis, channel_id, is_thread, is_thread_creator
             )
 
             processing_steps["reward_calculation"]["completed"] = True
@@ -230,7 +242,7 @@ class MessageLevelingSystem:
             if not result:
                 logger.error("  ❌ Failed to process rewards")
                 self._log_final_summary(guild_id, user_id, processing_steps, start_time, success=False,
-                                        is_thread=is_thread, settings=settings, reason="Database update failed")
+                                        is_thread=is_thread, is_thread_creator=is_thread_creator, settings=settings, reason="Database update failed")
                 return None
 
             logger.debug(f"  ✅ Database updated ({processing_steps['database_update']['duration_ms']:.2f}ms)")
@@ -248,7 +260,7 @@ class MessageLevelingSystem:
             # Log comprehensive final summary
             self._log_final_summary(
                 guild_id, user_id, processing_steps, start_time,
-                success=True, is_thread=is_thread, settings=settings, result=result, rewards=rewards,
+                success=True, is_thread=is_thread, is_thread_creator=is_thread_creator, settings=settings, result=result, rewards=rewards,
                 content_analysis=content_analysis
             )
 
@@ -264,6 +276,7 @@ class MessageLevelingSystem:
                         "content": message_content,
                         "channel_id": channel_id,
                         "is_thread": is_thread,
+                        "is_thread_creator": is_thread_creator,
                         "rewards": rewards,
                         "leveled_up": result.get("leveled_up", False),
                         "new_level": result.get("level_up", {}).get("new_level")
@@ -285,6 +298,7 @@ class MessageLevelingSystem:
             start_time: float,
             success: bool,
             is_thread: bool,
+            is_thread_creator: bool = False,
             settings: Optional[Dict[str, Any]] = None,
             reason: str = None,
             result: Dict[str, Any] = None,
@@ -370,8 +384,8 @@ class MessageLevelingSystem:
 
             if rewards and settings:
                 msg_cfg = settings.get("message", {})
-                base_xp = msg_cfg.get("base_xp", 0)
-                base_embers = msg_cfg.get("base_embers", 0)
+                base_xp = msg_cfg.get("base_xp", 10)
+                base_embers = msg_cfg.get("base_embers", 6)
                 multipliers = result.get("multipliers", {})
 
                 logger.info("")
@@ -387,6 +401,8 @@ class MessageLevelingSystem:
             logger.info("")
             logger.info("📝 Message Context:")
             logger.info(f"  • In Thread: {'Yes' if is_thread else 'No'}")
+            if is_thread and is_thread_creator:
+                logger.info(f"  • Thread Creator: Yes (extra bonus applied)")
 
         logger.info("=" * 70)
 
@@ -450,20 +466,60 @@ class MessageLevelingSystem:
 
         return True
 
-    def analyze_message_content(self, content: str, settings: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze_message_content(self, content: str, settings: Dict[str, Any], has_attachments: bool = False) -> Dict[str, Any]:
         """
         Analyze message content for quality scoring.
+
+        Args:
+            content: Message text content
+            settings: Guild settings
+            has_attachments: Whether message has attachments
         """
         quality_cfg = settings.get("message", {}).get("quality_analysis", {})
+
+        # Calculate real word count (excluding emoji patterns and URLs)
+        # Debug: Log original content
+        logger.debug(f"  📝 Original content: {repr(content)}")
+
+        # Remove custom Discord emojis: <:name:id> or <a:name:id>
+        content_no_custom_emojis = re.sub(r'<a?:\w+:\d+>', '', content)
+        logger.debug(f"  📝 After removing custom emojis: {repr(content_no_custom_emojis)}")
+
+        # Remove emoji shortcodes: :emoji_name:
+        content_no_emoji_shortcodes = re.sub(r':\w+:', '', content_no_custom_emojis)
+        logger.debug(f"  📝 After removing shortcodes: {repr(content_no_emoji_shortcodes)}")
+
+        # Remove Unicode emojis using comprehensive pattern
+        # This pattern matches all common emoji ranges
+        unicode_emoji_pattern = re.compile(
+            r'[\U0001F300-\U0001F9FF]|'  # Common emoji block
+            r'[\U0001F600-\U0001F64F]|'  # Emoticons
+            r'[\U0001F680-\U0001F6FF]|'  # Transport & map symbols
+            r'[\u2600-\u27BF]|'  # Miscellaneous Symbols
+            r'[\u2700-\u27BF]|'  # Dingbats
+            r'[\uFE00-\uFE0F]|'  # Variation Selectors
+            r'[\u200D]'  # Zero Width Joiner (used in multi-part emojis)
+        )
+        content_no_unicode_emojis = unicode_emoji_pattern.sub('', content_no_emoji_shortcodes)
+        logger.debug(f"  📝 After removing Unicode emojis: {repr(content_no_unicode_emojis)}")
+
+        # Remove URLs (links should not count as words)
+        content_no_urls = self._URL_REGEX.sub('', content_no_unicode_emojis)
+        logger.debug(f"  📝 After removing URLs: {repr(content_no_urls)}")
+
+        # Count actual words (excluding emojis and URLs)
+        real_word_count = len([word for word in content_no_urls.split() if word.strip()])
+        logger.debug(f"  📝 Real word count: {real_word_count}")
 
         analysis = {
             "score": 1.0,
             "length": len(content),
-            "word_count": len(content.split()),
+            "word_count": real_word_count,
             "emoji_count": ContentAnalyzer.count_emojis(content),
             "link_count": ContentAnalyzer.count_links(content),
             "code_block_count": len(re.findall(r'```[\s\S]*?```|`[^`]+`', content)),
             "caps_ratio": sum(1 for c in content if c.isupper()) / len(content) if content else 0,
+            "has_attachments": has_attachments,
             "has_links": False,
             "bonuses": {},
             "penalties": {},
@@ -478,20 +534,117 @@ class MessageLevelingSystem:
             analysis["bonuses"]["length"] = length_bonus_multiplier
             analysis["factors"].append("substantial_content")
 
-        # Emoji bonus
-        if analysis["emoji_count"] > 0:
-            emoji_bonus_multiplier = quality_cfg.get("emoji_bonus", 1.05)
-            analysis["score"] *= emoji_bonus_multiplier
-            analysis["bonuses"]["emojis"] = emoji_bonus_multiplier
-            analysis["factors"].append("emoji_usage")
+        # Attachment quality analysis
+        if has_attachments:
+            word_count = analysis["word_count"]
 
-        # Link bonus
+            # Thresholds for attachment context (configurable)
+            attachment_only_threshold = quality_cfg.get("attachment_only_word_threshold", 5)
+            attachment_short_text_threshold = quality_cfg.get("attachment_short_text_threshold", 20)
+
+            # Penalties and bonuses (from MongoDB settings)
+            attachment_only_penalty = quality_cfg.get("attachment_only_penalty", 0.7)
+            attachment_short_text_penalty = quality_cfg.get("attachment_with_short_text_penalty", 0.85)
+            attachment_bonus = quality_cfg.get("attachment_bonus", 1.08)
+
+            if word_count < attachment_only_threshold:
+                # Attachment with no/minimal text - apply penalty
+                analysis["score"] *= attachment_only_penalty
+                analysis["penalties"]["attachment_only"] = attachment_only_penalty
+                analysis["factors"].append("attachment_no_context")
+                logger.debug(f"    • Attachment-only penalty applied: {attachment_only_penalty}x ({word_count} words)")
+
+            elif word_count < attachment_short_text_threshold:
+                # Attachment with short text - reduced penalty
+                analysis["score"] *= attachment_short_text_penalty
+                analysis["penalties"]["attachment_short_text"] = attachment_short_text_penalty
+                analysis["factors"].append("attachment_minimal_context")
+                logger.debug(f"    • Attachment short-text penalty applied: {attachment_short_text_penalty}x ({word_count} words)")
+
+            else:
+                # Attachment with good text - apply bonus
+                analysis["score"] *= attachment_bonus
+                analysis["bonuses"]["attachment"] = attachment_bonus
+                analysis["factors"].append("attachment_with_context")
+                logger.debug(f"    • Attachment bonus applied: {attachment_bonus}x ({word_count} words)")
+
+        # Emoji analysis with progressive penalty system
+        emoji_count = analysis["emoji_count"]
+        word_count = analysis["word_count"]
+
+        if emoji_count > 0:
+            # Get emoji settings from quality config
+            emoji_bonus = quality_cfg.get("emoji_bonus", 1.05)
+            emoji_penalty_threshold = quality_cfg.get("emoji_penalty_threshold", 10)
+            emoji_penalty_base = quality_cfg.get("emoji_penalty_base", 0.75)
+            emoji_penalty_increment = quality_cfg.get("emoji_penalty_increment", 0.05)
+            emoji_penalty_floor = quality_cfg.get("emoji_penalty_floor", 0.5)
+            emoji_only_penalty = quality_cfg.get("emoji_only_penalty", 0.75)
+            emoji_only_word_threshold = quality_cfg.get("emoji_only_word_threshold", 3)
+
+            # Check for emoji-only messages (very few words, mostly emojis)
+            if word_count < emoji_only_word_threshold:
+                # Emoji-only message - apply penalty
+                analysis["score"] *= emoji_only_penalty
+                analysis["penalties"]["emoji_only"] = emoji_only_penalty
+                analysis["factors"].append("emoji_only_message")
+                logger.debug(f"    • Emoji-only penalty applied: {emoji_only_penalty}x ({emoji_count} emojis, {word_count} words)")
+
+            elif emoji_count >= emoji_penalty_threshold:
+                # Progressive penalty for emoji spam
+                # Calculate penalty: base - (count - threshold) * increment, clamped to floor
+                emojis_over_threshold = emoji_count - emoji_penalty_threshold
+                calculated_penalty = emoji_penalty_base - (emojis_over_threshold * emoji_penalty_increment)
+                emoji_spam_penalty = max(emoji_penalty_floor, calculated_penalty)
+
+                analysis["score"] *= emoji_spam_penalty
+                analysis["penalties"]["emoji_spam"] = emoji_spam_penalty
+                analysis["factors"].append("emoji_spam")
+                logger.debug(f"    • Emoji spam penalty applied: {emoji_spam_penalty:.2f}x ({emoji_count} emojis)")
+
+            else:
+                # Normal emoji bonus (1-9 emojis with good text)
+                analysis["score"] *= emoji_bonus
+                analysis["bonuses"]["emojis"] = emoji_bonus
+                analysis["factors"].append("emoji_usage")
+                logger.debug(f"    • Emoji bonus applied: {emoji_bonus}x ({emoji_count} emojis)")
+
+        # Link analysis with context detection
         if analysis["link_count"] > 0:
             analysis["has_links"] = True
-            link_bonus_multiplier = quality_cfg.get("link_bonus", 1.03)
-            analysis["score"] *= link_bonus_multiplier
-            analysis["bonuses"]["links"] = link_bonus_multiplier
-            analysis["factors"].append("link_sharing")
+
+            # Get link analysis settings
+            link_bonus = quality_cfg.get("link_bonus", 1.03)
+            link_only_penalty = quality_cfg.get("link_only_penalty", 0.65)
+            link_context_word_threshold = quality_cfg.get("link_context_word_threshold", 10)
+            link_spam_threshold = quality_cfg.get("link_spam_threshold", 5)
+            link_spam_penalty = quality_cfg.get("link_spam_penalty", 0.7)
+
+            link_count = analysis["link_count"]
+            word_count = analysis["word_count"]
+
+            # Check for link spam (too many links)
+            if link_count >= link_spam_threshold:
+                # Link spam detected - apply penalty
+                analysis["score"] *= link_spam_penalty
+                analysis["penalties"]["link_spam"] = link_spam_penalty
+                analysis["factors"].append("link_spam")
+                logger.debug(f"    • Link spam penalty applied: {link_spam_penalty}x ({link_count} links)")
+
+            # Check for link-only messages (insufficient context)
+            elif word_count < link_context_word_threshold:
+                # Link without sufficient context - apply penalty
+                analysis["score"] *= link_only_penalty
+                analysis["penalties"]["link_no_context"] = link_only_penalty
+                analysis["factors"].append("link_no_context")
+                logger.debug(f"    • Link-only penalty applied: {link_only_penalty}x ({word_count} words, {link_count} links)")
+
+            else:
+                # Link with good context - apply bonus
+                analysis["score"] *= link_bonus
+                analysis["bonuses"]["links"] = link_bonus
+                analysis["factors"].append("link_sharing")
+                logger.debug(f"    • Link bonus applied: {link_bonus}x ({link_count} links with {word_count} words context)")
 
         # Code block bonus
         if analysis["code_block_count"] > 0:
@@ -512,7 +665,7 @@ class MessageLevelingSystem:
 
         return analysis
 
-    async def validate_message(self, message_length: int, settings: Dict, user_data: Dict, channel_id: str = None) -> \
+    async def validate_message(self, message_length: int, settings: Dict, user_data: Dict, channel_id: str = None, has_attachments: bool = False) -> \
     Dict[str, Any]:
         """
         Basic message validation.
@@ -524,6 +677,7 @@ class MessageLevelingSystem:
         logger.debug(f"  🔍 Validation checks:")
         logger.debug(f"    • Min length required: {min_length}")
         logger.debug(f"    • Cooldown: {cooldown_seconds}s")
+        logger.debug(f"    • Has attachments: {has_attachments}")
 
         # Check if channel is disabled
         disabled_channels = msg_cfg.get("disabled_channels", [])
@@ -531,13 +685,15 @@ class MessageLevelingSystem:
             logger.debug(f"    ❌ Channel {channel_id} is disabled for leveling")
             return {"valid": False, "reason": "Channel disabled for leveling"}
 
-        # Length validation
-        if message_length < min_length:
+        # Length validation - allow messages with attachments even if text is short
+        if message_length < min_length and not has_attachments:
             logger.debug(f"    ❌ Message too short: {message_length} < {min_length}")
             return {
                 "valid": False,
                 "reason": f"Message too short ({message_length} < {min_length})"
             }
+        elif message_length < min_length and has_attachments:
+            logger.debug(f"    ✅ Message has attachments, bypassing length check ({message_length} chars)")
 
         # Cooldown validation
         last_message_time = user_data.get("message_stats", {}).get("last_message_time", 0)
@@ -603,7 +759,8 @@ class MessageLevelingSystem:
             settings: Dict,
             content_analysis: Dict,
             channel_id: str = None,
-            is_thread: bool = False
+            is_thread: bool = False,
+            is_thread_creator: bool = False
     ) -> Dict[str, float]:
         """
         Calculate message rewards based on content and user stats.
@@ -663,10 +820,17 @@ class MessageLevelingSystem:
                 logger.debug(f"    • Premium channel bonus applied: {bonus}x")
 
             if is_thread:
-                thread_bonus = msg_cfg.get("thread_bonus", 1.0)
+                thread_bonus = msg_cfg.get("thread_bonus", 1.15)
                 if thread_bonus > 1.0:
                     channel_multiplier *= thread_bonus
                     logger.debug(f"    • Thread bonus applied: {thread_bonus}x")
+
+                # Additional bonus for thread creators (encourages quality thread creation)
+                if is_thread_creator:
+                    thread_starter_bonus = msg_cfg.get("thread_starter_bonus", 1.25)
+                    if thread_starter_bonus > 1.0:
+                        channel_multiplier *= thread_starter_bonus
+                        logger.debug(f"    • Thread creator bonus applied: {thread_starter_bonus}x")
 
             # Calculate final rewards
             calculated_xp = base_xp * length_factor * streak_bonus * quality_score * xp_multiplier * channel_multiplier

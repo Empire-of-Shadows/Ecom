@@ -310,6 +310,70 @@ class EnhancedReactionTracker(commands.Cog):
                 }
             )
 
+            # =============================================================
+            # SUBSUBSECTION: Achievement System Integration
+            # =============================================================
+            if hasattr(self.bot, "leveling_system") and hasattr(self.bot.leveling_system, "achievement_system"):
+                try:
+                    # Prepare activity data for achievement system
+                    achievement_activity_data = {
+                        "activity_type": "reaction",
+                        "reactor_id": str(reactor_id),
+                        "message_owner_id": str(message_owner_id),
+                        "emoji": str(reaction.emoji),
+                        "is_custom_emoji": hasattr(reaction.emoji, "id"),
+                        "channel_id": str(channel_id),
+                        "message_id": str(message.id),
+                        "timestamp": utc_now_ts()
+                    }
+
+                    # Update achievements for the reactor (who gave the reaction)
+                    await self.bot.leveling_system.achievement_system.check_and_update_achievements(
+                        user_id=str(reactor_id),
+                        guild_id=str(guild_id),
+                        activity_data=achievement_activity_data
+                    )
+
+                    # Update achievements for the message owner (who got the reaction)
+                    owner_activity_data = {
+                        "activity_type": "got_reaction",
+                        "reactor_id": str(reactor_id),
+                        "message_owner_id": str(message_owner_id),
+                        "emoji": str(reaction.emoji),
+                        "is_custom_emoji": hasattr(reaction.emoji, "id"),
+                        "channel_id": str(channel_id),
+                        "message_id": str(message.id),
+                        "timestamp": utc_now_ts()
+                    }
+
+                    await self.bot.leveling_system.achievement_system.check_and_update_achievements(
+                        user_id=str(message_owner_id),
+                        guild_id=str(guild_id),
+                        activity_data=owner_activity_data
+                    )
+
+                    self._log.debug(
+                        "achievement_processing_completed",
+                        extra={
+                            "event": "achievements_checked",
+                            "guild_id": guild_id,
+                            "reactor_id": reactor_id,
+                            "message_owner_id": message_owner_id
+                        }
+                    )
+
+                except Exception as e:
+                    self._log.warning(
+                        "achievement_processing_failed",
+                        extra={
+                            "event": "achievement_error",
+                            "guild_id": guild_id,
+                            "reactor_id": reactor_id,
+                            "message_owner_id": message_owner_id,
+                            "error": str(e)
+                        }
+                    )
+
         except Exception as e:
             self._log.exception(
                 "reaction_processing_failed",

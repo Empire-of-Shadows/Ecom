@@ -138,6 +138,6 @@ class ReactionLevelingSystem:
             if final_xp > 0: update_owner["$inc"]["xp"] = round(final_xp)
             if final_embers > 0: update_owner["$inc"]["embers"] = round(final_embers)
             update_owner.setdefault("$set", {})["last_rewarded.got_reaction"] = now
-            
-        await self.level_system.update_user_data(owner_id, guild_id, update_owner)
+
+        await self.leveling_system.update_user_data(owner_id, guild_id, update_owner)
         self.logger.debug(f"Processed owner rewards for G:{guild_id} U:{owner_id}")

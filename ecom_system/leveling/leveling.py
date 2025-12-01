@@ -526,12 +526,47 @@ class LevelingSystem:
             return str(value)
 
     async def get_guild_settings(self, guild_id: str) -> Dict[str, Any]:
-        """Get guild leveling settings."""
+        """
+        Get guild leveling settings by merging all settings collections.
+
+        Loads from:
+        - Master: Guild-specific settings (guild_id, notification_channel, level_roles, etc.)
+        - Message: Message leveling settings (base_xp, quality_analysis, caps, etc.)
+        - Voice: Voice leveling settings (xp_per_min, bonuses, etc.)
+        - Reaction: Reaction settings (reactor/owner rewards, bonuses, etc.)
+        """
         try:
-            settings = await self.ls_master.find_one({"guild_id": guild_id})
-            return settings or {}
+            # Load guild-specific settings from Master collection
+            master_settings = await self.ls_master.find_one({"guild_id": guild_id})
+            if not master_settings:
+                logger.warning(f"⚠️ No Master settings found for guild {guild_id}, using defaults")
+                master_settings = {}
+
+            # Load subsystem settings (these are global, no guild_id filter)
+            message_settings = await self.ls_message.find_one({})
+            voice_settings = await self.ls_voice.find_one({})
+            reaction_settings = await self.ls_reaction.find_one({})
+
+            # Merge all settings together
+            merged_settings = {**master_settings}
+
+            # Add subsystem settings
+            if message_settings and "message" in message_settings:
+                merged_settings["message"] = message_settings["message"]
+            if voice_settings and "voice" in voice_settings:
+                merged_settings["voice"] = voice_settings["voice"]
+            if reaction_settings and "reaction" in reaction_settings:
+                merged_settings["reaction"] = reaction_settings["reaction"]
+
+            logger.debug(f"✅ Loaded settings for guild {guild_id}: "
+                        f"message={'✓' if 'message' in merged_settings else '✗'}, "
+                        f"voice={'✓' if 'voice' in merged_settings else '✗'}, "
+                        f"reaction={'✓' if 'reaction' in merged_settings else '✗'}")
+
+            return merged_settings
+
         except Exception as e:
-            logger.error(f"❌ Error getting guild settings: {e}")
+            logger.error(f"❌ Error getting guild settings: {e}", exc_info=True)
             return {}
 
     def xp_for_level(self, level: int) -> int:

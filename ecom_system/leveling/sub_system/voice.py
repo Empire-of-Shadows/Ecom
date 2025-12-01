@@ -102,16 +102,27 @@ class VoiceLevelingSystem:
         """Handle user joining a voice channel."""
         if session_key not in self.voice_sessions:
             # New session - user joins for the first time
+            channel_id = str(after.channel.id) if after.channel else None
+
+            # Count non-bot members in the channel
+            participant_count = 0
+            if after.channel:
+                participant_count = len([m for m in after.channel.members if not m.bot])
+
             session = VoiceSession(
                 start_time=current_time,
+                channel_id=channel_id,
+                participant_count=participant_count,
                 is_muted=after.mute,
                 is_deafened=after.deaf,
                 is_self_muted=after.self_mute,
                 is_self_deafened=after.self_deaf,
+                is_streaming=after.self_stream,
+                is_video=after.self_video,
             )
             self.voice_sessions[session_key] = session
             logger.info(f"🎤 Voice session started for U:{user_id} in G:{guild_id} "
-                        f"(channel: {after.channel.name})")
+                        f"(channel: {after.channel.name}, ID: {channel_id}, participants: {participant_count})")
 
             # Check for daily streak on new session
             user_data = await self.leveling_system.get_user_data(user_id, guild_id)
@@ -126,11 +137,19 @@ class VoiceLevelingSystem:
         else:
             # Existing session - user moved channels or reconnected
             session = self.voice_sessions[session_key]
+            # Update channel_id if user moved to a different channel
+            new_channel_id = str(after.channel.id) if after.channel else None
+            if session.channel_id != new_channel_id:
+                logger.debug(f"🚶 User moved channels: {session.channel_id} → {new_channel_id}")
+                session.channel_id = new_channel_id
+
             session.set_state(
                 muted=after.mute,
                 deafened=after.deaf,
                 self_muted=after.self_mute,
                 self_deafened=after.self_deaf,
+                streaming=after.self_stream,
+                video=after.self_video,
                 update_time=current_time,
             )
             logger.debug(f"🎤 Voice session updated for U:{user_id} in G:{guild_id}")
@@ -153,6 +172,8 @@ class VoiceLevelingSystem:
                 deafened=after.deaf,
                 self_muted=after.self_mute,
                 self_deafened=after.self_deaf,
+                streaming=after.self_stream,
+                video=after.self_video,
                 update_time=current_time,
             )
 
@@ -190,11 +211,12 @@ class VoiceLevelingSystem:
                 logger.info(f"🆕 Creating new user profile for voice: U:{user_id}")
                 user_data = await self.leveling_system.create_enhanced_user_profile(user_id, guild_id)
 
-            # Calculate rewards
-            rewards = await self._calculate_voice_rewards(active_seconds, settings, user_data, metrics)
+            # Calculate rewards (with channel-specific bonuses)
+            channel_id = session.channel_id
+            rewards = await self._calculate_voice_rewards(active_seconds, settings, user_data, metrics, channel_id)
 
-            # TODO: Implement voice caps from settings
-            # rewards = self._apply_voice_caps(rewards, user_data, settings)
+            # Apply voice caps (daily/weekly/monthly limits)
+            rewards = self._apply_voice_caps(rewards, user_data, settings)
 
             if rewards["xp"] > 0 or rewards["embers"] > 0:
                 result_data = await self._update_user_voice_stats(
@@ -228,9 +250,11 @@ class VoiceLevelingSystem:
             logger.error(f"❌ Error processing voice rewards: {e}", exc_info=True)
 
     async def _calculate_voice_rewards(self, active_seconds: float, settings: Dict[str, Any],
-                                       user_data: Dict[str, Any], metrics: Dict[str, Any]) -> Dict[str, float]:
+                                       user_data: Dict[str, Any], metrics: Dict[str, Any],
+                                       channel_id: str = None) -> Dict[str, float]:
         """
         Calculate voice rewards based on active duration, settings, and engagement.
+        Includes channel-specific bonuses if configured.
         """
         try:
             voice_cfg = settings.get("voice", {})
@@ -254,9 +278,64 @@ class VoiceLevelingSystem:
             else:
                 level_multiplier = 1.0
 
+            # Channel-specific bonuses
+            channel_multiplier = 1.0
+            channel_bonuses = voice_cfg.get("channel_bonuses", {})
+            if channel_id and channel_id in channel_bonuses:
+                bonus = channel_bonuses[channel_id]
+                channel_multiplier = bonus
+                logger.debug(f"  • Channel bonus applied: {bonus}x (channel: {channel_id})")
+
+            # Streaming/Video bonuses (based on time spent streaming/with camera)
+            streaming_multiplier = 1.0
+            video_multiplier = 1.0
+
+            # Apply screen share bonus if user was streaming during session
+            streaming_time = metrics.get("streaming_time", 0)
+            if streaming_time > 0:
+                screen_share_bonus = voice_cfg.get("screen_share_bonus", 1.0)
+                if screen_share_bonus > 1.0:
+                    streaming_multiplier = screen_share_bonus
+                    logger.debug(f"  • Screen share bonus applied: {screen_share_bonus}x ({streaming_time:.1f}s streaming)")
+
+            # Apply camera bonus if user had video on during session
+            video_time = metrics.get("video_time", 0)
+            if video_time > 0:
+                camera_bonus = voice_cfg.get("camera_bonus", 1.0)
+                if camera_bonus > 1.0:
+                    video_multiplier = camera_bonus
+                    logger.debug(f"  • Camera bonus applied: {camera_bonus}x ({video_time:.1f}s with camera)")
+
+            # Participant count bonus (social bonus for populated channels)
+            participant_multiplier = 1.0
+            participant_count = metrics.get("participant_count", 0)
+            participant_bonus_enabled = voice_cfg.get("participant_bonus_enabled", False)
+
+            if participant_bonus_enabled and participant_count > 0:
+                # Anti-exploit: Require minimum active time before applying participant bonus
+                min_time = voice_cfg.get("participant_min_time_seconds", 60)
+                if active_seconds >= min_time:
+                    threshold = voice_cfg.get("participant_bonus_threshold", 3)
+                    bonus_per_person = voice_cfg.get("participant_bonus_per_person", 0.05)
+                    max_bonus = voice_cfg.get("participant_bonus_max", 1.5)
+
+                    # Apply bonus if above threshold
+                    if participant_count >= threshold:
+                        # Calculate bonus: 1.0 + (additional_people * bonus_per_person)
+                        additional_people = participant_count - threshold
+                        calculated_bonus = 1.0 + (additional_people * bonus_per_person)
+                        participant_multiplier = min(calculated_bonus, max_bonus)
+                        logger.debug(f"  • Participant bonus applied: {participant_multiplier:.2f}x "
+                                   f"({participant_count} members, {additional_people} above threshold)")
+                    else:
+                        logger.debug(f"  • Participant count below threshold: {participant_count} < {threshold}")
+                else:
+                    logger.debug(f"  • Minimum time not met for participant bonus: "
+                               f"{active_seconds:.1f}s < {min_time}s")
+
             # Calculate final rewards
-            calculated_xp = base_xp_per_min * active_minutes * engagement_multiplier * streak_bonus * level_multiplier
-            calculated_embers = base_embers_per_min * active_minutes * engagement_multiplier * streak_bonus * level_multiplier
+            calculated_xp = base_xp_per_min * active_minutes * engagement_multiplier * streak_bonus * level_multiplier * channel_multiplier * streaming_multiplier * video_multiplier * participant_multiplier
+            calculated_embers = base_embers_per_min * active_minutes * engagement_multiplier * streak_bonus * level_multiplier * channel_multiplier * streaming_multiplier * video_multiplier * participant_multiplier
 
             final_xp = max(1, round(calculated_xp))
             final_embers = max(1, round(calculated_embers))
@@ -264,8 +343,14 @@ class VoiceLevelingSystem:
             logger.debug(f"🎯 Voice reward calculation:")
             logger.debug(f"  • Base: {base_xp_per_min} XP/min, {base_embers_per_min} Embers/min")
             logger.debug(f"  • Active time: {active_minutes:.1f} minutes")
+            if channel_id:
+                logger.debug(f"  • Channel: {channel_id}")
+            if participant_count > 0:
+                logger.debug(f"  • Participants: {participant_count} members")
             logger.debug(f"  • Multipliers: engagement={engagement_multiplier:.2f}x, "
-                         f"streak={streak_bonus:.2f}x, level={level_multiplier:.2f}x")
+                         f"streak={streak_bonus:.2f}x, level={level_multiplier:.2f}x, "
+                         f"channel={channel_multiplier:.2f}x, streaming={streaming_multiplier:.2f}x, "
+                         f"video={video_multiplier:.2f}x, participants={participant_multiplier:.2f}x")
             logger.debug(f"  • Final: {final_xp} XP, {final_embers} Embers")
 
             return {
@@ -274,13 +359,169 @@ class VoiceLevelingSystem:
                 "multipliers": {
                     "engagement": engagement_multiplier,
                     "streak": streak_bonus,
-                    "level": level_multiplier
+                    "level": level_multiplier,
+                    "channel": channel_multiplier,
+                    "streaming": streaming_multiplier,
+                    "video": video_multiplier,
+                    "participants": participant_multiplier
                 }
             }
 
         except Exception as e:
             logger.error(f"❌ Voice reward calculation error: {e}")
             return {"xp": 0.0, "embers": 0.0}
+
+    def _apply_voice_caps(self, rewards: Dict[str, float], user_data: Dict[str, Any],
+                          settings: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Apply daily/weekly/monthly caps to voice rewards.
+        Reduces rewards if they would exceed configured limits.
+
+        Args:
+            rewards: Calculated rewards before caps
+            user_data: Current user data with existing totals
+            settings: Guild settings with cap configuration
+
+        Returns:
+            Adjusted rewards that respect caps
+        """
+        try:
+            voice_cfg = settings.get("voice", {})
+            voice_stats = user_data.get("voice_stats", {})
+
+            # Get cap configuration
+            daily_caps = voice_cfg.get("daily_caps", {})
+            weekly_caps = voice_cfg.get("weekly_caps", {})
+            monthly_caps = voice_cfg.get("monthly_caps", {})
+
+            # Skip if no caps configured
+            if not daily_caps and not weekly_caps and not monthly_caps:
+                logger.debug("  ⚙️ No voice caps configured, skipping cap check")
+                return rewards
+
+            # Get current time keys
+            current_today_key = utc_today_key()
+            current_week_key = utc_week_key()
+            current_month_key = utc_month_key()
+
+            # Get stored time keys (for reset detection)
+            stored_today_key = voice_stats.get("today_key")
+            stored_week_key = voice_stats.get("week_key")
+            stored_month_key = voice_stats.get("month_key")
+
+            # Get current totals (reset if new period)
+            today_xp = voice_stats.get("today_xp", 0) if stored_today_key == current_today_key else 0
+            today_embers = voice_stats.get("today_embers", 0) if stored_today_key == current_today_key else 0
+
+            weekly_xp = voice_stats.get("weekly_xp", 0) if stored_week_key == current_week_key else 0
+            weekly_embers = voice_stats.get("weekly_embers", 0) if stored_week_key == current_week_key else 0
+
+            monthly_xp = voice_stats.get("monthly_xp", 0) if stored_month_key == current_month_key else 0
+            monthly_embers = voice_stats.get("monthly_embers", 0) if stored_month_key == current_month_key else 0
+
+            # Start with original rewards
+            final_xp = rewards.get("xp", 0)
+            final_embers = rewards.get("embers", 0)
+            original_xp = final_xp
+            original_embers = final_embers
+
+            cap_applied = False
+            cap_reasons = []
+
+            # Check daily caps
+            if daily_caps:
+                daily_xp_cap = daily_caps.get("xp", float('inf'))
+                daily_embers_cap = daily_caps.get("embers", float('inf'))
+
+                # Calculate remaining room
+                xp_room = max(0, daily_xp_cap - today_xp)
+                embers_room = max(0, daily_embers_cap - today_embers)
+
+                # Apply cap if needed
+                if final_xp > xp_room:
+                    final_xp = xp_room
+                    cap_applied = True
+                    cap_reasons.append(f"daily XP cap ({daily_xp_cap})")
+
+                if final_embers > embers_room:
+                    final_embers = embers_room
+                    cap_applied = True
+                    cap_reasons.append(f"daily Embers cap ({daily_embers_cap})")
+
+                # Warn when approaching cap (90%)
+                if today_xp + final_xp >= daily_xp_cap * 0.9 and today_xp < daily_xp_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching daily XP cap: {today_xp + final_xp:.0f}/{daily_xp_cap}")
+                if today_embers + final_embers >= daily_embers_cap * 0.9 and today_embers < daily_embers_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching daily Embers cap: {today_embers + final_embers:.0f}/{daily_embers_cap}")
+
+            # Check weekly caps
+            if weekly_caps:
+                weekly_xp_cap = weekly_caps.get("xp", float('inf'))
+                weekly_embers_cap = weekly_caps.get("embers", float('inf'))
+
+                xp_room = max(0, weekly_xp_cap - weekly_xp)
+                embers_room = max(0, weekly_embers_cap - weekly_embers)
+
+                if final_xp > xp_room:
+                    final_xp = min(final_xp, xp_room)
+                    cap_applied = True
+                    cap_reasons.append(f"weekly XP cap ({weekly_xp_cap})")
+
+                if final_embers > embers_room:
+                    final_embers = min(final_embers, embers_room)
+                    cap_applied = True
+                    cap_reasons.append(f"weekly Embers cap ({weekly_embers_cap})")
+
+                if weekly_xp + final_xp >= weekly_xp_cap * 0.9 and weekly_xp < weekly_xp_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching weekly XP cap: {weekly_xp + final_xp:.0f}/{weekly_xp_cap}")
+                if weekly_embers + final_embers >= weekly_embers_cap * 0.9 and weekly_embers < weekly_embers_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching weekly Embers cap: {weekly_embers + final_embers:.0f}/{weekly_embers_cap}")
+
+            # Check monthly caps
+            if monthly_caps:
+                monthly_xp_cap = monthly_caps.get("xp", float('inf'))
+                monthly_embers_cap = monthly_caps.get("embers", float('inf'))
+
+                xp_room = max(0, monthly_xp_cap - monthly_xp)
+                embers_room = max(0, monthly_embers_cap - monthly_embers)
+
+                if final_xp > xp_room:
+                    final_xp = min(final_xp, xp_room)
+                    cap_applied = True
+                    cap_reasons.append(f"monthly XP cap ({monthly_xp_cap})")
+
+                if final_embers > embers_room:
+                    final_embers = min(final_embers, embers_room)
+                    cap_applied = True
+                    cap_reasons.append(f"monthly Embers cap ({monthly_embers_cap})")
+
+                if monthly_xp + final_xp >= monthly_xp_cap * 0.9 and monthly_xp < monthly_xp_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching monthly XP cap: {monthly_xp + final_xp:.0f}/{monthly_xp_cap}")
+                if monthly_embers + final_embers >= monthly_embers_cap * 0.9 and monthly_embers < monthly_embers_cap * 0.9:
+                    logger.info(f"  ⚠️ Approaching monthly Embers cap: {monthly_embers + final_embers:.0f}/{monthly_embers_cap}")
+
+            # Log if caps were applied
+            if cap_applied:
+                reduction_xp = original_xp - final_xp
+                reduction_embers = original_embers - final_embers
+                logger.warning(f"  🚫 Voice rewards capped: XP {original_xp:.0f}→{final_xp:.0f} "
+                             f"(-{reduction_xp:.0f}), Embers {original_embers:.0f}→{final_embers:.0f} "
+                             f"(-{reduction_embers:.0f})")
+                logger.warning(f"  📊 Reason(s): {', '.join(cap_reasons)}")
+
+            # Return adjusted rewards
+            return {
+                "xp": float(max(0, final_xp)),
+                "embers": float(max(0, final_embers)),
+                "multipliers": rewards.get("multipliers", {}),
+                "capped": cap_applied,
+                "original_xp": original_xp,
+                "original_embers": original_embers
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error applying voice caps: {e}", exc_info=True)
+            return rewards  # Return original rewards on error
 
     async def _update_user_voice_stats(self, user_id: str, guild_id: str, rewards: Dict[str, float],
                                        metrics: Dict[str, Any], user_data: Dict[str, Any], settings: Dict[str, Any]):
@@ -306,6 +547,17 @@ class VoiceLevelingSystem:
             week_key = utc_week_key()
             month_key = utc_month_key()
 
+            # Get stored time keys for reset detection
+            voice_stats = user_data.get("voice_stats", {})
+            stored_today_key = voice_stats.get("today_key")
+            stored_week_key = voice_stats.get("week_key")
+            stored_month_key = voice_stats.get("month_key")
+
+            # Determine if we need to reset counters (new period)
+            reset_daily = stored_today_key != today_key
+            reset_weekly = stored_week_key != week_key
+            reset_monthly = stored_month_key != month_key
+
             update_data = {
                 "$set": {
                     "xp": new_xp,
@@ -327,16 +579,33 @@ class VoiceLevelingSystem:
                     "voice_stats.self_muted_time": metrics.get("self_muted_time", 0),
                     "voice_stats.self_deafened_time": metrics.get("self_deafened_time", 0),
                     "voice_stats.voice_sessions": 1,
-
-                    # Rewards tracking
-                    "voice_stats.today_xp": rewards.get("xp", 0),
-                    "voice_stats.today_embers": rewards.get("embers", 0),
-                    "voice_stats.weekly_xp": rewards.get("xp", 0),
-                    "voice_stats.weekly_embers": rewards.get("embers", 0),
-                    "voice_stats.monthly_xp": rewards.get("xp", 0),
-                    "voice_stats.monthly_embers": rewards.get("embers", 0),
                 }
             }
+
+            # Handle period resets and increments
+            if reset_daily:
+                logger.debug(f"  🔄 Daily reset detected ({stored_today_key} → {today_key})")
+                update_data["$set"]["voice_stats.today_xp"] = rewards.get("xp", 0)
+                update_data["$set"]["voice_stats.today_embers"] = rewards.get("embers", 0)
+            else:
+                update_data["$inc"]["voice_stats.today_xp"] = rewards.get("xp", 0)
+                update_data["$inc"]["voice_stats.today_embers"] = rewards.get("embers", 0)
+
+            if reset_weekly:
+                logger.debug(f"  🔄 Weekly reset detected ({stored_week_key} → {week_key})")
+                update_data["$set"]["voice_stats.weekly_xp"] = rewards.get("xp", 0)
+                update_data["$set"]["voice_stats.weekly_embers"] = rewards.get("embers", 0)
+            else:
+                update_data["$inc"]["voice_stats.weekly_xp"] = rewards.get("xp", 0)
+                update_data["$inc"]["voice_stats.weekly_embers"] = rewards.get("embers", 0)
+
+            if reset_monthly:
+                logger.debug(f"  🔄 Monthly reset detected ({stored_month_key} → {month_key})")
+                update_data["$set"]["voice_stats.monthly_xp"] = rewards.get("xp", 0)
+                update_data["$set"]["voice_stats.monthly_embers"] = rewards.get("embers", 0)
+            else:
+                update_data["$inc"]["voice_stats.monthly_xp"] = rewards.get("xp", 0)
+                update_data["$inc"]["voice_stats.monthly_embers"] = rewards.get("embers", 0)
 
             # Update session metrics
             total_sessions = user_data.get("voice_stats", {}).get("voice_sessions", 0) + 1

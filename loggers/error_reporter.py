@@ -24,6 +24,18 @@ email = os.getenv("EMAIL")
 password = os.getenv("PASSWORD")
 
 
+def safe_print(message: str) -> None:
+    """Safely print messages, handling Unicode encoding errors on Windows"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # Remove emojis and special characters for Windows console compatibility
+        import re
+        # Strip emojis and other unicode symbols
+        ascii_message = re.sub(r'[^\x00-\x7F]+', '', message)
+        print(ascii_message.strip())
+
+
 class ErrorAnalyzer:
     """Analyzes errors to determine severity and category"""
 
@@ -173,13 +185,23 @@ class ErrorReporter:
         self.correlation_window = timedelta(minutes=5)
         self.pattern_threshold = 5  # Similar errors in window
 
-        print(f"🚀 Error Reporter initialized")
-        print(f"   📧 Email: {email}")
-        print(f"   ⏱️ Interval: {interval}s")
-        print(f"   📊 Max errors per email: {max_errors_per_email}")
-        print(f"   🎨 HTML enabled: {enable_html}")
-        print(f"   📎 Attachments enabled: {enable_attachments}")
-        print(f"   🔍 Severity threshold: {severity_threshold.value}")
+        try:
+            safe_print(f"🚀 Error Reporter initialized")
+            safe_print(f"   📧 Email: {email}")
+            safe_print(f"   ⏱️ Interval: {interval}s")
+            safe_print(f"   📊 Max errors per email: {max_errors_per_email}")
+            safe_print(f"   🎨 HTML enabled: {enable_html}")
+            safe_print(f"   📎 Attachments enabled: {enable_attachments}")
+            safe_print(f"   🔍 Severity threshold: {severity_threshold.value}")
+        except UnicodeEncodeError:
+            # Fallback for Windows console without UTF-8 support
+            safe_print("Error Reporter initialized")
+            safe_print(f"   Email: {email}")
+            safe_print(f"   Interval: {interval}s")
+            safe_print(f"   Max errors per email: {max_errors_per_email}")
+            safe_print(f"   HTML enabled: {enable_html}")
+            safe_print(f"   Attachments enabled: {enable_attachments}")
+            safe_print(f"   Severity threshold: {severity_threshold.name}")
 
     def log_error(
             self,
@@ -243,16 +265,16 @@ class ErrorReporter:
                 self.error_counter[f"{category.value}: {error}"] += 1
                 self.stats['total_processed'] += 1
 
-                print(f"📝 Logged {severity.value} error: {category.value}")
+                safe_print(f"📝 Logged {severity.value} error: {category.value}")
 
                 # Immediate send for critical errors
                 if severity == Severity.CRITICAL:
                     asyncio.create_task(self._send_immediate_alert(error_context))
             else:
-                print(f"🚫 Suppressed repeated error pattern (count: {recent_count})")
+                safe_print(f"🚫 Suppressed repeated error pattern (count: {recent_count})")
 
         except Exception as e:
-            print(f"❌ Failed to log error: {e}")
+            safe_print(f"❌ Failed to log error: {e}")
 
     def _severity_order(self, severity: Severity) -> int:
         """Get numeric order for severity comparison"""
@@ -310,10 +332,10 @@ class ErrorReporter:
                 )
 
             await asyncio.to_thread(self._send_email, subject, body)
-            print(f"🚨 Sent immediate critical alert")
+            safe_print(f"🚨 Sent immediate critical alert")
 
         except Exception as e:
-            print(f"❌ Failed to send immediate alert: {e}")
+            safe_print(f"❌ Failed to send immediate alert: {e}")
 
     def _calculate_statistics(self, errors: List[ErrorContext]) -> Dict[str, Any]:
         """Calculate comprehensive error statistics"""
@@ -411,7 +433,7 @@ class ErrorReporter:
             return filename
 
         except Exception as e:
-            print(f"❌ Failed to create log attachment: {e}")
+            safe_print(f"❌ Failed to create log attachment: {e}")
             return None
 
     def _send_email(self, subject: str, body: str, attachment_path: Optional[str] = None):
@@ -463,9 +485,9 @@ class ErrorReporter:
                             new_msg.attach(attach)
                             msg = new_msg
 
-                    print(f"📎 Added attachment: {attachment_path}")
+                    safe_print(f"📎 Added attachment: {attachment_path}")
                 except Exception as e:
-                    print(f"❌ Failed to add attachment: {e}")
+                    safe_print(f"❌ Failed to add attachment: {e}")
 
             # Send email with enhanced SSL context
             context = ssl.create_default_context(cafile=certifi.where())
@@ -483,20 +505,20 @@ class ErrorReporter:
             if attachment_path and os.path.exists(attachment_path):
                 try:
                     os.remove(attachment_path)
-                    print(f"🗑️ Cleaned up attachment: {attachment_path}")
+                    safe_print(f"🗑️ Cleaned up attachment: {attachment_path}")
                 except Exception as e:
-                    print(f"⚠️ Failed to cleanup attachment: {e}")
+                    safe_print(f"⚠️ Failed to cleanup attachment: {e}")
 
         except Exception as e:
             self.consecutive_failures += 1
-            print(f"❌ Failed to send email (attempt {self.consecutive_failures}): {e}")
+            safe_print(f"❌ Failed to send email (attempt {self.consecutive_failures}): {e}")
 
             if self.consecutive_failures >= self.max_failures:
-                print(f"🚫 Maximum email failures reached. Disabling email notifications temporarily.")
+                safe_print(f"🚫 Maximum email failures reached. Disabling email notifications temporarily.")
 
     async def start_loop(self):
         """Enhanced background loop with comprehensive error processing"""
-        print(f"🔄 Starting enhanced error notification loop (interval: {self.interval}s)")
+        safe_print(f"🔄 Starting enhanced error notification loop (interval: {self.interval}s)")
 
         while True:
             try:
@@ -505,11 +527,11 @@ class ErrorReporter:
                 if not self.errors:
                     continue
 
-                print(f"📨 Processing {len(self.errors)} errors for email notification")
+                safe_print(f"📨 Processing {len(self.errors)} errors for email notification")
 
                 # Skip if too many consecutive failures
                 if self.consecutive_failures >= self.max_failures:
-                    print(f"⏭️ Skipping email send due to consecutive failures")
+                    safe_print(f"⏭️ Skipping email send due to consecutive failures")
                     self.errors.clear()
                     self.error_counter.clear()
                     continue
@@ -564,19 +586,19 @@ class ErrorReporter:
                 self.errors.clear()
                 self.error_counter.clear()
 
-                print(f"✅ Sent error report with {processed_count} errors")
+                safe_print(f"✅ Sent error report with {processed_count} errors")
 
                 # Print statistics
                 uptime = datetime.now() - self.stats['uptime_start']
-                print(f"📊 Session stats: {self.stats['total_processed']} processed, "
+                safe_print(f"📊 Session stats: {self.stats['total_processed']} processed, "
                       f"{self.stats['total_sent']} emails sent, "
                       f"uptime: {str(uptime).split('.')[0]}")
 
             except asyncio.CancelledError:
-                print("🛑 Error notification loop cancelled")
+                safe_print("🛑 Error notification loop cancelled")
                 break
             except Exception as e:
-                print(f"❌ Error in notification loop: {e}")
+                safe_print(f"❌ Error in notification loop: {e}")
                 # Continue running despite errors in the loop itself
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -607,20 +629,20 @@ class ErrorReporter:
             'total_sent': 0,
             'last_reset': datetime.now()
         })
-        print("📊 Statistics reset")
+        safe_print("📊 Statistics reset")
 
     def clear_errors(self):
         """Manually clear all pending errors"""
         count = len(self.errors)
         self.errors.clear()
         self.error_counter.clear()
-        print(f"🗑️ Cleared {count} pending errors")
+        safe_print(f"🗑️ Cleared {count} pending errors")
 
     def set_severity_threshold(self, threshold: Severity):
         """Change the severity threshold for notifications"""
         old_threshold = self.severity_threshold
         self.severity_threshold = threshold
-        print(f"🔄 Changed severity threshold from {old_threshold.value} to {threshold.value}")
+        safe_print(f"🔄 Changed severity threshold from {old_threshold.value} to {threshold.value}")
 
 
 # For backward compatibility, create an alias
@@ -630,7 +652,7 @@ ErrorNotifier = ErrorReporter
 # Example usage and test function
 async def test_enhanced_notifier():
     """Test function demonstrating the enhanced features"""
-    print("🧪 Testing Error Reporter...")
+    safe_print("🧪 Testing Error Reporter...")
 
     # Initialize with enhanced features
     notifier = ErrorReporter(
@@ -677,14 +699,14 @@ async def test_enhanced_notifier():
     for i, test_error in enumerate(test_errors):
         error_msg = test_error.pop('error')
         notifier.log_error(error_msg, **test_error)
-        print(f"✅ Logged test error {i + 1}")
+        safe_print(f"✅ Logged test error {i + 1}")
         await asyncio.sleep(0.1)  # Small delay between errors
 
     # Print statistics
     stats = notifier.get_statistics()
-    print(f"📊 Current statistics: {json.dumps(stats, indent=2)}")
+    safe_print(f"📊 Current statistics: {json.dumps(stats, indent=2)}")
 
-    print("🧪 Test complete - errors logged and ready for processing")
+    safe_print("🧪 Test complete - errors logged and ready for processing")
 
     return notifier
 
@@ -746,15 +768,15 @@ class ReportingHandler(logging.Handler):
 # 		notifier = await test_enhanced_notifier()
 #
 # 		# Start the notification loop for a short test
-# 		print("🔄 Starting notification loop for 60 seconds...")
+# 		safe_print("🔄 Starting notification loop for 60 seconds...")
 #
 # 		try:
 # 			# Run the loop for 1 minute for testing
 # 			await asyncio.wait_for(notifier.start_loop(), timeout=60.0)
 # 		except asyncio.TimeoutError:
-#			print("⏰ Test timeout - stopping")
+#			safe_print("⏰ Test timeout - stopping")
 # 		except KeyboardInterrupt:
-# 			print("⌨️ Interrupted by user")
+# 			safe_print("⌨️ Interrupted by user")
 #
 #
 # 	asyncio.run(main())
