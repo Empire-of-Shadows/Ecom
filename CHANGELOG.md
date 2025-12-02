@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - 2025-12-01
+
+### Added
+-   **Comprehensive Testing Scenarios**: Created a detailed testing document (`docs/phase_9_test_scenarios.md`) covering all new reward calculation features from phases 1-8, including edge cases for attachments, emojis, links, threads, and all voice-related bonuses and caps.
+
+### Changed
+-   **Reward System Overhaul**: Completed a multi-phase overhaul of the XP and Ember reward calculation system to make it more fair, engaging, and resistant to farming. All new features are fully configurable via MongoDB settings.
+    -   **Phase 1: Attachment Quality**: Implemented contextual rewards for messages with attachments. Messages with attachments and sufficient text get a bonus (`1.08x`), while attachment-only messages receive a penalty (`0.7x`).
+    -   **Phase 2: Emoji Spam Penalties**: Introduced a progressive penalty system for emoji spam. A small bonus is retained for light emoji use, but messages with 10+ emojis receive a scaling penalty, capped at a `0.5x` multiplier. Emoji-only messages are also penalized.
+    -   **Phase 3: Link Context Analysis**: The system now analyzes the context of shared links. Links with descriptive text receive a bonus (`1.03x`), while links with little or no context are penalized (`0.65x`). Link spam is also penalized.
+    -   **Phase 4: Thread Bonuses**: Incentivized thread participation by adding a `1.15x` bonus for all messages in a thread and an additional `1.25x` bonus for the thread creator, which stack.
+    -   **Phase 5: Voice Caps**: Implemented daily, weekly, and monthly caps for voice rewards (XP, Embers, and time) to ensure fair distribution and prevent abuse. The system includes warnings when approaching caps and handles period resets automatically.
+    -   **Phase 6: Voice Channel Bonuses**: Admins can now configure specific voice channels to provide bonus rewards, allowing for designated high-value channels.
+    -   **Phase 7: Streaming & Video Bonuses**: Users are now rewarded for more engaging voice participation. Screen sharing (`self_stream`) provides a `1.15x` bonus, and camera usage (`self_video`) provides a `1.10x` bonus. These bonuses stack.
+    -   **Phase 8: Participant Count Bonus**: A new "social bonus" rewards users for being in populated voice channels. The bonus scales with the number of participants (starting after 3 members) and includes anti-exploit measures.
+
+### Documentation
+-   **Reward Calculation Improvement Plan**: Updated `docs/reward_calculation_improvement_plan.md` to mark all implementation phases (1-8) and the initial documentation phase (9.1, 9.2) as complete.
+
 ## Unreleased - 11-30-2025
 
 ### Added

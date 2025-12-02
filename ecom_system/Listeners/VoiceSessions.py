@@ -10,11 +10,13 @@ logger = logging.getLogger("VoiceSession")
 @dataclass
 class VoiceSession:
     """
-    Comprehensive voice session tracking with detailed state management.
-    Tracks time spent in various voice states for accurate reward calculation.
-    """
+    Represents and tracks an individual user's voice session with detailed analytics.
 
-    # Core session tracking
+    This dataclass holds all state information for a user's time in a voice channel,
+    including start and end times, various states (muted, deafened, streaming, etc.),
+    and the time spent in each state. It provides methods to compute detailed
+    metrics about the session, such as active time and engagement score.
+    """
     start_time: float
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     channel_id: Optional[str] = None  # Voice channel ID for channel-specific bonuses

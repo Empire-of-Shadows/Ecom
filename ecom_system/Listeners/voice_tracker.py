@@ -48,9 +48,9 @@ class VoiceListener(commands.Cog):
                 self.leveling_system = self.bot.leveling_system
                 self.logger.info("✅ VoiceListener using shared leveling system from bot")
 
-                # TODO: Call the `startup_voice_check` method on the voice_system
-                # to handle users already in voice channels.
-                # await self.leveling_system.voice_system.startup_voice_check(self.bot.guilds)
+                # Call the `startup_voice_check` method on the voice_system
+                # to handle users already in voice channels when the bot starts.
+                await self.leveling_system.voice_system.startup_voice_check(self.bot)
 
             else:
                 self.logger.error("❌ No leveling system found on bot instance")
@@ -145,7 +145,18 @@ class VoiceListener(commands.Cog):
             after: discord.VoiceState,
     ):
         """
-        Handle voice state updates with comprehensive tracking and analysis.
+        Handles voice state updates to manage user voice sessions and rewards.
+
+        This is the primary event listener for voice activity. It triggers on any
+        change to a user's voice state (joining, leaving, moving, muting, etc.).
+
+        The method performs the following steps:
+        1. Ignores bots and users who have opted out.
+        2. Analyzes the state change to determine the event type (join, leave, move).
+        3. Records the raw voice activity event in the ActivitySystem for analytics.
+        4. Delegates the state change to the VoiceLevelingSystem to manage the
+           user's voice session, calculate rewards upon leaving, and handle achievements.
+        5. Logs a descriptive summary of the event.
         """
         if member.bot or not member.guild:
             return

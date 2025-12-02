@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from discord import VoiceState
 
 from ecom_system.Listeners.VoiceSessions import VoiceSession
+from ecom_system.helpers.check_level_role import update_level_role_on_levelup
 from ecom_system.helpers.helpers import utc_now_ts, utc_today_key, utc_week_key, utc_month_key
+from ecom_system.helpers.leveled_up import LevelUpMessages
 from ecom_system.helpers.rate_limiter import rate_limiter
 from ecom_system.helpers.daily_streak import check_and_update_streak, create_streak_update_data
 from loggers.log_factory import log_performance, PerformanceLogger
@@ -253,8 +255,28 @@ class VoiceLevelingSystem:
                                        user_data: Dict[str, Any], metrics: Dict[str, Any],
                                        channel_id: str = None) -> Dict[str, float]:
         """
-        Calculate voice rewards based on active duration, settings, and engagement.
-        Includes channel-specific bonuses if configured.
+        Calculate voice rewards based on a variety of engagement factors.
+
+        This function computes XP and Ember rewards for a voice session based on:
+        - Active (unmuted/undeafened) duration.
+        - The user's daily streak bonus.
+        - A low-level boost for new users.
+        - Channel-specific multipliers.
+        - Bonuses for streaming or having a camera on.
+        - A "social bonus" that scales with the number of participants in the channel.
+
+        All bonuses and multipliers are sourced from guild settings and stack together.
+
+        Args:
+            active_seconds: The number of seconds the user was active in the session.
+            settings: The guild's leveling settings.
+            user_data: The user's current data, including level and streak.
+            metrics: A dictionary of metrics from the VoiceSession.
+            channel_id: The ID of the voice channel where the session took place.
+
+        Returns:
+            A dictionary containing the calculated 'xp' and 'embers', along with
+            a breakdown of the multipliers that were applied.
         """
         try:
             voice_cfg = settings.get("voice", {})
@@ -526,8 +548,27 @@ class VoiceLevelingSystem:
     async def _update_user_voice_stats(self, user_id: str, guild_id: str, rewards: Dict[str, float],
                                        metrics: Dict[str, Any], user_data: Dict[str, Any], settings: Dict[str, Any]):
         """
-        Update user voice statistics and process rewards.
-        Uses the main leveling system's update structure.
+        Update user statistics after a voice session and handle level-ups.
+
+        This function takes the calculated rewards and session metrics, updates the
+        user's profile in the database with new totals for XP, Embers, and voice
+        statistics. It also handles the logic for level-ups, including triggering
+        role updates and sending notification messages.
+
+        It manages daily, weekly, and monthly stat tracking, ensuring counters are
+        reset at the start of each new period.
+
+        Args:
+            user_id: The ID of the user.
+            guild_id: The ID of the guild.
+            rewards: A dictionary of capped XP and Ember rewards to be added.
+            metrics: A dictionary of metrics from the completed VoiceSession.
+            user_data: The user's data before this update.
+            settings: The guild's leveling settings.
+
+        Returns:
+            A dictionary containing the results of the update, including final
+            totals and level-up information if applicable.
         """
         try:
             current_xp = user_data.get("xp", 0)
@@ -636,9 +677,77 @@ class VoiceLevelingSystem:
                     "old_level": current_level,
                     "new_level": new_level
                 }
-
-                # TODO: Trigger level-up notifications and role updates
                 logger.info(f"🎊 Voice level up: {current_level} → {new_level}")
+
+                try:
+                    # Check and update level roles
+                    logger.debug(f"🎭 Checking level roles for new level {new_level}")
+                    role_result = await update_level_role_on_levelup(
+                        bot=self.leveling_system.bot,
+                        leveling_system=self.leveling_system,
+                        guild_id=guild_id,
+                        user_id=user_id,
+                        new_level=new_level
+                    )
+
+                    if role_result.success and role_result.action_taken != "none":
+                        logger.info(f"🎭 Level role update: {role_result.reason}")
+                        if role_result.roles_added:
+                            logger.info(f"  ➕ Added roles: {[r.name for r in role_result.roles_added]}")
+                        if role_result.roles_removed:
+                            logger.info(f"  ➖ Removed roles: {[r.name for r in role_result.roles_removed]}")
+                    elif role_result.error:
+                        logger.warning(f"⚠️ Level role update failed: {role_result.error}")
+                    else:
+                        logger.debug(f"ℹ️ Level roles: {role_result.reason}")
+
+                    # Send level-up message
+                    if self.leveling_system.level_up_messages:
+                        guild_settings = await self.leveling_system.get_guild_settings(guild_id)
+                        notification_channel = guild_settings.get("notification_channel")
+
+                        if notification_channel:
+                            prestige_level = user_data.get("prestige_level", 0)
+                            reason = LevelUpMessages.determine_reason(current_level, new_level, prestige_level)
+
+                            extra_data = {
+                                "total_xp": new_xp,
+                                "xp_to_next": self.leveling_system.xp_to_next_level(new_level),
+                                "embers": new_embers,
+                                "streak": user_data.get("daily_streak", {}).get("count", 0),
+                                "total_voice_seconds": user_data.get("voice_stats", {}).get("voice_seconds", 0) + metrics.get("voice_seconds", 0),
+                                "longest_streak": user_data.get("longest_streak", 0),
+                                "prestige_level": prestige_level
+                            }
+
+                            if role_result.success and role_result.action_taken != "none":
+                                extra_data["role_update"] = {
+                                    "action": role_result.action_taken,
+                                    "new_role": role_result.target_role.name if role_result.target_role else None,
+                                    "roles_added": [r.name for r in role_result.roles_added],
+                                    "roles_removed": [r.name for r in role_result.roles_removed]
+                                }
+
+                            logger.debug(f"📨 Attempting to send level-up message to channel {notification_channel}")
+                            success = await self.leveling_system.level_up_messages.send_level_up_message(
+                                guild_id=guild_id,
+                                user_id=user_id,
+                                old_level=current_level,
+                                new_level=new_level,
+                                channel_id=notification_channel,
+                                reason=reason,
+                                extra_data=extra_data
+                            )
+                            if success:
+                                logger.info(f"✅ Level-up message successfully sent to channel {notification_channel}")
+                            else:
+                                logger.warning(f"⚠️ Level-up message failed to send to channel {notification_channel}")
+                        else:
+                            logger.debug(f"ℹ️ No notification channel configured for guild {guild_id}")
+                    else:
+                        logger.warning(f"⚠️ Level-up message handler not initialized")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send voice level-up message: {e}", exc_info=True)
 
             await self.leveling_system.update_user_data(user_id, guild_id, update_data)
             logger.debug(f"✅ Voice stats updated successfully: G:{guild_id} U:{user_id}")

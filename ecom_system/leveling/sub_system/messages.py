@@ -22,29 +22,14 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # TODO: UNIMPLEMENTED FEATURES FROM SETTINGS
 # =============================================================================
+# The following features are planned but not yet implemented:
 #
-# 2. QUALITY ANALYSIS SETTINGS (settings.message.quality_analysis.*)
-#    Currently using hardcoded values, should use:
-#    - emoji_bonus: 1.05 (currently hardcoded 0.05 per emoji)
-#    - length_quality_threshold: 50
-#    - length_quality_bonus: 1.1
-#    - attachment_bonus: 1.08 (NOT IMPLEMENTED - need attachment detection)
-#    - mention_penalty: 0.9 (NOT IMPLEMENTED - need mention count)
-#    - caps_penalty: 0.8 (partially implemented in anti-cheat only)
-#    - constructive_bonus: 1.15 (NOT IMPLEMENTED - need ML/sentiment analysis)
-#    - link_bonus: 1.03 (currently hardcoded 0.08 per link)
-#    - code_block_bonus: 1.07 (NOT IMPLEMENTED - need code block detection)
-#    Location: analyze_message_content()
-#
-# 3. CHANNEL CONFIGURATIONS (settings.message.*)
-#    - channel_bonuses: {} - Per-channel XP/Ember multipliers
-#    - thread_bonus: 1.15 - Bonus for thread messages (15% bonus)
-#    - thread_starter_bonus: 1.25 - Extra bonus for thread creators (25% bonus, stacks with thread_bonus)
-#    - disabled_channels: [] - Channels to ignore
-#    - premium_channels: {} - Special channel multipliers
-#    - channel_caps: {} - Per-channel daily limits
-#    Location: process_message() or calculate_message_rewards()
-#    Implementation: Check channel_id against these settings
+# 1. QUALITY ANALYSIS SETTINGS (settings.message.quality_analysis.*)
+#    - mention_penalty: 0.9 (NOT IMPLEMENTED)
+#      - Would require detecting and counting user mentions in messages.
+#    - constructive_bonus: 1.15 (NOT IMPLEMENTED)
+#      - Would require a machine learning model or advanced sentiment
+#        analysis to detect "constructive" messages.
 #
 # =============================================================================
 
@@ -468,12 +453,29 @@ class MessageLevelingSystem:
 
     def analyze_message_content(self, content: str, settings: Dict[str, Any], has_attachments: bool = False) -> Dict[str, Any]:
         """
-        Analyze message content for quality scoring.
+        Analyzes message content to determine a quality score and gather metrics.
+
+        This function performs a comprehensive analysis of the message content,
+        calculating a quality score based on various factors, including:
+        - Message length and word count (excluding emojis and URLs).
+        - Presence of attachments and the context provided with them.
+        - Use of emojis, with penalties for spamming.
+        - Sharing of links and the context provided.
+        - Use of code blocks.
+        - Excessive use of capital letters.
+
+        The final score is a multiplier used in reward calculations and is clamped
+        between 0.5x and 2.0x.
 
         Args:
-            content: Message text content
-            settings: Guild settings
-            has_attachments: Whether message has attachments
+            content: The text content of the message.
+            settings: A dictionary containing the guild's leveling settings.
+            has_attachments: A boolean indicating if the message has attachments.
+
+        Returns:
+            A dictionary containing the analysis results, including the quality
+            score, content metrics (word count, emoji count, etc.), and a list
+            of factors that influenced the score.
         """
         quality_cfg = settings.get("message", {}).get("quality_analysis", {})
 
